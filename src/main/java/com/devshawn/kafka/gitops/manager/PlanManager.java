@@ -15,6 +15,11 @@ import com.devshawn.kafka.gitops.exception.ReadPlanInputException;
 import com.devshawn.kafka.gitops.exception.WritePlanOutputException;
 import com.devshawn.kafka.gitops.service.KafkaService;
 import com.devshawn.kafka.gitops.util.PlanUtil;
+import com.devshawn.kafka.gitops.util.PlanValidation;
+import com.devshawn.kafka.gitops.util.TopicConfigSecurity;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -30,6 +35,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class PlanManager {
     private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(PlanManager.class);
@@ -41,7 +47,15 @@ public class PlanManager {
     public PlanManager(ManagerConfig managerConfig, KafkaService kafkaService, ObjectMapper objectMapper) {
         this.managerConfig = managerConfig;
         this.kafkaService = kafkaService;
-        this.objectMapper = objectMapper;
+        // Plan files are executable input. Keep strict reading local to plans, not the shared mapper.
+        this.objectMapper = objectMapper.copy()
+                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .enable(DeserializationFeature.FAIL_ON_NUMBERS_FOR_ENUMS)
+                .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+                .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .disable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_AS_NULL)
+                .disable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE)
+                .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
     }
 
     public void planTopics(DesiredState desiredState, DesiredPlan.Builder desiredPlan) {
@@ -92,7 +106,8 @@ public class PlanManager {
 
     private void planTopicConfigurations(String topicName, TopicDetails topicDetails, List<ConfigEntry> configs, TopicPlan.Builder topicPlan) {
         Map<String, TopicConfigPlan> configPlans = new HashMap<>();
-        List<ConfigEntry> customConfigs = configs.stream()
+        List<ConfigEntry> currentConfigs = configs == null ? List.of() : configs;
+        List<ConfigEntry> customConfigs = currentConfigs.stream()
                 .filter(it -> it.source() == ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG)
                 .toList();
 
@@ -100,33 +115,39 @@ public class PlanManager {
             String newConfig = topicDetails.getConfigs().getOrDefault(currentConfig.name(), null);
 
             TopicConfigPlan.Builder topicConfigPlan = new TopicConfigPlan.Builder()
-                    .setKey(currentConfig.name());
+                    .setKey(currentConfig.name())
+                    .setSensitive(currentConfig.isSensitive() || TopicConfigSecurity.isSensitive(currentConfig.name()));
 
-            if (currentConfig.value().equals(newConfig)) {
-                topicConfigPlan.setAction(PlanAction.NO_CHANGE);
-                topicConfigPlan.setValue(currentConfig.value());
-                configPlans.put(currentConfig.name(), topicConfigPlan.build());
-            } else if (newConfig == null) {
+            if (newConfig == null) {
                 topicConfigPlan.setAction(PlanAction.REMOVE);
+                if (!topicConfigPlan.isSensitive()) {
+                    topicConfigPlan.setNullablePreviousValue(currentConfig.value());
+                }
+                configPlans.put(currentConfig.name(), topicConfigPlan.build());
+                topicPlan.setAction(PlanAction.UPDATE);
+            } else if (Objects.equals(currentConfig.value(), newConfig)) {
+                topicConfigPlan.setAction(PlanAction.NO_CHANGE);
+                if (!topicConfigPlan.isSensitive()) {
+                    topicConfigPlan.setValue(newConfig);
+                }
+                configPlans.put(currentConfig.name(), topicConfigPlan.build());
+            } else {
+                topicConfigPlan.setAction(PlanAction.UPDATE).setValue(newConfig);
+                if (!topicConfigPlan.isSensitive()) {
+                    topicConfigPlan.setNullablePreviousValue(currentConfig.value());
+                }
                 configPlans.put(currentConfig.name(), topicConfigPlan.build());
                 topicPlan.setAction(PlanAction.UPDATE);
             }
         });
 
         topicDetails.getConfigs().forEach((key, value) -> {
-            ConfigEntry currentConfig = customConfigs.stream().filter(it -> it.name().equals(key)).findFirst().orElse(null);
-
-            TopicConfigPlan.Builder topicConfigPlan = new TopicConfigPlan.Builder()
-                    .setKey(key)
-                    .setValue(value);
-
-            if (currentConfig == null) {
-                topicConfigPlan.setAction(PlanAction.ADD);
-                configPlans.put(key, topicConfigPlan.build());
-                topicPlan.setAction(PlanAction.UPDATE);
-            } else if (!currentConfig.value().equals(value)) {
-                topicConfigPlan.setAction(PlanAction.UPDATE);
-                configPlans.put(key, topicConfigPlan.build());
+            if (!configPlans.containsKey(key) && value != null) {
+                boolean sensitive = TopicConfigSecurity.isSensitive(key) || currentConfigs.stream()
+                        .anyMatch(config -> config.name().equals(key) && config.isSensitive());
+                TopicConfigPlan configPlan = new TopicConfigPlan.Builder()
+                        .setKey(key).setValue(value).setSensitive(sensitive).setAction(PlanAction.ADD).build();
+                configPlans.put(key, configPlan);
                 topicPlan.setAction(PlanAction.UPDATE);
             }
         });
@@ -190,11 +211,15 @@ public class PlanManager {
     public DesiredPlan readPlanFromFile() {
         return managerConfig.getPlanFile().map(file -> {
             try {
-                return objectMapper.readValue(file, DesiredPlan.class);
+                DesiredPlan plan = objectMapper.readValue(file, DesiredPlan.class);
+                PlanValidation.validate(plan);
+                return plan;
             } catch (FileNotFoundException ex) {
                 throw new ReadPlanInputException("The specified plan file could not be found.");
             } catch (IOException ex) {
                 throw new ReadPlanInputException();
+            } catch (IllegalArgumentException ex) {
+                throw new ReadPlanInputException("Unsupported or incomplete operations in the plan. Generate a new plan.");
             }
         }).orElse(null);
     }
@@ -202,13 +227,17 @@ public class PlanManager {
     public void writePlanToFile(DesiredPlan desiredPlan) {
         managerConfig.getPlanFile().ifPresent(planFile -> {
             try {
+                DesiredPlan outputPlan = managerConfig.isIncludeUnchangedEnabled() ? desiredPlan : desiredPlan.toChangesOnlyPlan();
+                // Serialize before opening the destination: confidential values must not truncate an existing file.
+                String output = objectMapper.writeValueAsString(outputPlan);
                 if (!planFile.createNewFile()) {
                     LOG.info("Overwriting existing plan file at {}", planFile);
                 }
-                DesiredPlan outputPlan = managerConfig.isIncludeUnchangedEnabled() ? desiredPlan : desiredPlan.toChangesOnlyPlan();
                 try(FileWriter writer = new FileWriter(planFile)) {
-                    writer.write(objectMapper.writeValueAsString(outputPlan));
+                    writer.write(output);
                 }
+            } catch (JsonProcessingException ex) {
+                throw new WritePlanOutputException("Plan serialization refused. Confidential values cannot be exported; apply directly from the state file.");
             } catch (IOException ex) {
                 throw new WritePlanOutputException(ex.getMessage());
             }

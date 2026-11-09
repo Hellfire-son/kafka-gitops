@@ -15,8 +15,8 @@ Applying: [CREATE]
 	+ partitions: 1
 	+ replication: 1
 	+ configs:
-		+ cleanup.policy: compact
-		+ segment.bytes: 100000
+		+ cleanup.policy: [default] -> compact
+		+ segment.bytes: [default] -> 100000
 
 
 Successfully applied.

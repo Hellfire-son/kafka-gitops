@@ -66,20 +66,24 @@ public final class LogUtil {
         System.out.println(green(String.format("\t+ replication: %s", topicDetails.getReplication().orElseThrow())));
         if (topicDetails.getConfigs().size() > 0) {
             System.out.println(green("\t+ configs:"));
-            topicDetails.getConfigs().forEach((key, value) -> System.out.println(green(String.format("\t\t+ %s: %s", key, value))));
+            topicDetails.getConfigs().forEach((key, value) -> System.out.println(green(String.format(
+                    "\t\t+ %s: [default] -> %s", key, TopicConfigSecurity.isSensitive(key) ? "[redacted]" : value))));
         }
     }
 
     private static void printTopicConfigPlan(TopicConfigPlan topicConfigPlan) {
+        boolean sensitive = TopicConfigSecurity.isSensitive(topicConfigPlan);
+        String previous = sensitive ? "[redacted]" : topicConfigPlan.getPreviousValue().orElse("[unknown]");
+        String value = sensitive ? "[redacted]" : topicConfigPlan.getValue().orElse("[unknown]");
         switch (topicConfigPlan.getAction()) {
             case ADD:
-                System.out.println(green(String.format("\t\t+ %s: %s", topicConfigPlan.getKey(), topicConfigPlan.getValue().orElseThrow())));
+                System.out.println(green(String.format("\t\t+ %s: [default] -> %s", topicConfigPlan.getKey(), value)));
                 break;
             case UPDATE:
-                System.out.println(yellow(String.format("\t\t~ %s: %s", topicConfigPlan.getKey(), topicConfigPlan.getValue().orElseThrow())));
+                System.out.println(yellow(String.format("\t\t~ %s: %s -> %s", topicConfigPlan.getKey(), previous, value)));
                 break;
             case REMOVE:
-                System.out.println(red(String.format("\t\t- %s", topicConfigPlan.getKey())));
+                System.out.println(red(String.format("\t\t- %s: %s -> [default]", topicConfigPlan.getKey(), previous)));
                 break;
         }
     }

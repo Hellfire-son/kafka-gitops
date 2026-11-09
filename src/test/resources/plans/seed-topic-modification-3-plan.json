@@ -43,6 +43,7 @@
                 {
                     "key": "segment.bytes",
                     "value": null,
+                    "previousValue": "100000",
                     "action": "REMOVE"
                 },
                 {
@@ -66,6 +67,7 @@
                 {
                     "key": "retention.ms",
                     "value": "100000",
+                    "previousValue": "60000",
                     "action": "UPDATE"
                 }
             ]

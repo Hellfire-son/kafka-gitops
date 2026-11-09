@@ -30,6 +30,7 @@
                 {
                     "key": "segment.bytes",
                     "value": null,
+                    "previousValue": "100000",
                     "action": "REMOVE"
                 },
                 {
