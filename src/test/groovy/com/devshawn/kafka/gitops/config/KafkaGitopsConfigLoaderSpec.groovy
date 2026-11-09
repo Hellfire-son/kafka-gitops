@@ -3,19 +3,18 @@ package com.devshawn.kafka.gitops.config
 import com.devshawn.kafka.gitops.exception.MissingConfigurationException
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.SaslConfigs
-import org.junit.ClassRule
+import org.junit.Rule
 import org.junit.contrib.java.lang.system.EnvironmentVariables
-import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Unroll
 
 class KafkaGitopsConfigLoaderSpec extends Specification {
 
-    @Shared
-    @ClassRule
-    EnvironmentVariables environmentVariables
+    @Rule
+    EnvironmentVariables environmentVariables = new EnvironmentVariables()
 
-    void setupSpec() {
+    void setup() {
+        System.getenv().keySet().findAll { it.startsWith("KAFKA_") }.each { environmentVariables.clear(it) }
         environmentVariables.set("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
         environmentVariables.set("KAFKA_SASL_MECHANISM", "PLAIN")
         environmentVariables.set("KAFKA_SECURITY_PROTOCOL", "SASL_PLAINTEXT")

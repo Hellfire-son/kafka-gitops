@@ -12,6 +12,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
@@ -19,6 +21,14 @@ import java.util.Properties;
 public class KafkaGitopsConfigLoader {
 
     private static final Logger LOG = LoggerFactory.getLogger(KafkaGitopsConfigLoader.class);
+
+    // Everything outside this explicit allowlist is omitted, including unknown plugin settings.
+    private static final List<String> SAFE_DIAGNOSTIC_CONFIG_KEYS = List.of(
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+            CommonClientConfigs.CLIENT_ID_CONFIG,
+            CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+            SaslConfigs.SASL_MECHANISM
+    );
 
     private KafkaGitopsConfigLoader() {
     }
@@ -31,7 +41,9 @@ public class KafkaGitopsConfigLoader {
         KafkaGitopsConfig.Builder builder = new KafkaGitopsConfig.Builder();
         setConfigFromFile(configFile, builder);
         setConfigFromEnvironment(builder);
-        return builder.build();
+        KafkaGitopsConfig config = builder.build();
+        LOG.info("Kafka Config (safe diagnostic fields only): {}", configurationForLogging(config.getConfig()));
+        return config;
     }
 
     private static void setConfigFromFile(File configFile, KafkaGitopsConfig.Builder builder) {
@@ -67,21 +79,18 @@ public class KafkaGitopsConfigLoader {
 
         config.putAll(handleAuthentication(config.get(SaslConfigs.SASL_MECHANISM), username, password));
 
-        LOG.info("Kafka Config: {}", sanitizeConfiguration(config));
-
         builder.putAllConfig(config);
         handleDefaultConfig(builder);
     }
 
-    private static Map<String, Object> sanitizeConfiguration(Map<String, Object> config) {
-        Map<String, Object> sanitizedConfig = new HashMap<>(config);
-
-        String saslConfig = (String) config.get(SaslConfigs.SASL_JAAS_CONFIG);
-        if (saslConfig != null) {
-            sanitizedConfig.replace(SaslConfigs.SASL_JAAS_CONFIG, saslConfig.replaceFirst("password=\".*\";", "password=[redacted];"));
+    private static Map<String, Object> configurationForLogging(Map<String, Object> config) {
+        Map<String, Object> diagnosticConfig = new LinkedHashMap<>();
+        for (String key : SAFE_DIAGNOSTIC_CONFIG_KEYS) {
+            if (config.containsKey(key)) {
+                diagnosticConfig.put(key, config.get(key));
+            }
         }
-
-        return sanitizedConfig;
+        return diagnosticConfig;
     }
 
     private static void handleDefaultConfig(KafkaGitopsConfig.Builder builder) {
