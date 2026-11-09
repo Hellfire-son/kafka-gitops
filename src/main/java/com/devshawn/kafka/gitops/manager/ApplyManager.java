@@ -7,8 +7,11 @@ import com.devshawn.kafka.gitops.domain.plan.TopicPlan;
 import com.devshawn.kafka.gitops.enums.PlanAction;
 import com.devshawn.kafka.gitops.service.KafkaService;
 import com.devshawn.kafka.gitops.util.LogUtil;
+import com.devshawn.kafka.gitops.util.PlanValidation;
+import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.*;
@@ -24,6 +27,27 @@ public class ApplyManager {
     }
 
     public void applyTopics(DesiredPlan desiredPlan) {
+        if (managerConfig.isSkipTopicsDisabled()) {
+            return;
+        }
+        PlanValidation.validate(desiredPlan);
+        // Check all partition preconditions before any topic is created, deleted or reconfigured.
+        List<String> names = desiredPlan.getTopicPlans().stream().filter(t -> t.getPartitionPlan().isPresent())
+                .map(TopicPlan::getName).toList();
+        Map<String, TopicDescription> descriptions = kafkaService.describeTopics(names);
+        desiredPlan.getTopicPlans().forEach(topic -> topic.getPartitionPlan().ifPresent(partitions -> {
+            TopicDescription current = descriptions.get(topic.getName());
+            if (current == null || current.partitions().isEmpty()) {
+                throw new KafkaExecutionException("Partition preflight failed.", "Missing metadata for topic " + topic.getName() + ". Re-plan before retrying.");
+            }
+            int count = current.partitions().size();
+            if (count != partitions.getPreviousCount() && count != partitions.getTargetCount()) {
+                throw new KafkaExecutionException("Partition plan is stale.", "Topic " + topic.getName() + " has "
+                        + count + " partitions; expected " + partitions.getPreviousCount() + " or already "
+                        + partitions.getTargetCount() + ". Re-plan before retrying.");
+            }
+            topic.getTopicDetails().ifPresent(details -> LogUtil.printReplicationWarning(topic.getName(), details, current));
+        }));
         desiredPlan.getTopicPlans().forEach(topicPlan -> {
             if (topicPlan.getAction() == PlanAction.ADD) {
                 LogUtil.printTopicPreApply(topicPlan);
@@ -31,7 +55,17 @@ public class ApplyManager {
                 LogUtil.printPostApply();
             } else if (topicPlan.getAction() == PlanAction.UPDATE) {
                 LogUtil.printTopicPreApply(topicPlan);
-                topicPlan.getTopicConfigPlans().forEach(topicConfigPlan -> applyTopicConfiguration(topicPlan, topicConfigPlan));
+                topicPlan.getPartitionPlan().ifPresent(partitions -> {
+                    // Re-check immediately before the write; the service also verifies the resulting metadata.
+                    boolean changed = kafkaService.increaseTopicPartitions(topicPlan.getName(), partitions.getPreviousCount(),
+                            partitions.getTargetCount());
+                    if (!changed) {
+                        System.out.printf("Topic %s already has %s partitions; partition change is a no-op.%n",
+                                topicPlan.getName(), partitions.getTargetCount());
+                    }
+                });
+                topicPlan.getTopicConfigPlans().stream().filter(c -> c.getAction() != PlanAction.NO_CHANGE)
+                        .forEach(topicConfigPlan -> applyTopicConfiguration(topicPlan, topicConfigPlan));
                 LogUtil.printPostApply();
             } else if (topicPlan.getAction() == PlanAction.REMOVE && !managerConfig.isDeleteDisabled()) {
                 LogUtil.printTopicPreApply(topicPlan);

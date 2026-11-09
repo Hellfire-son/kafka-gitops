@@ -6,6 +6,7 @@ import com.devshawn.kafka.gitops.domain.plan.DesiredPlan;
 import com.devshawn.kafka.gitops.domain.plan.PlanOverview;
 import com.devshawn.kafka.gitops.domain.plan.TopicConfigPlan;
 import com.devshawn.kafka.gitops.domain.plan.TopicPlan;
+import com.devshawn.kafka.gitops.domain.plan.TopicPartitionPlan;
 import com.devshawn.kafka.gitops.domain.state.AclDetails;
 import com.devshawn.kafka.gitops.domain.state.DesiredState;
 import com.devshawn.kafka.gitops.domain.state.TopicDetails;
@@ -13,17 +14,24 @@ import com.devshawn.kafka.gitops.enums.PlanAction;
 import com.devshawn.kafka.gitops.exception.PlanIsUpToDateException;
 import com.devshawn.kafka.gitops.exception.ReadPlanInputException;
 import com.devshawn.kafka.gitops.exception.WritePlanOutputException;
+import com.devshawn.kafka.gitops.exception.ValidationException;
+import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
 import com.devshawn.kafka.gitops.service.KafkaService;
 import com.devshawn.kafka.gitops.util.PlanUtil;
 import com.devshawn.kafka.gitops.util.PlanValidation;
 import com.devshawn.kafka.gitops.util.TopicConfigSecurity;
+import com.devshawn.kafka.gitops.util.LogUtil;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.cfg.CoercionAction;
+import com.fasterxml.jackson.databind.cfg.CoercionInputShape;
+import com.fasterxml.jackson.databind.type.LogicalType;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.TopicListing;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.config.ConfigResource;
 import org.slf4j.LoggerFactory;
@@ -53,14 +61,26 @@ public class PlanManager {
                 .enable(DeserializationFeature.FAIL_ON_NUMBERS_FOR_ENUMS)
                 .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
                 .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
                 .disable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_AS_NULL)
                 .disable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE)
                 .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+        this.objectMapper.coercionConfigFor(LogicalType.Integer).setCoercion(CoercionInputShape.String, CoercionAction.Fail);
     }
 
     public void planTopics(DesiredState desiredState, DesiredPlan.Builder desiredPlan) {
+        if (managerConfig.isSkipTopicsDisabled()) {
+            return;
+        }
+        desiredState.getTopics().forEach((name, details) -> {
+            if (details.getPartitions() < 1) {
+                throw new ValidationException("The partition count must be a positive integer (topic: " + name + ").");
+            }
+        });
         List<TopicListing> topics = kafkaService.getTopics();
         List<String> topicNames = topics.stream().map(TopicListing::name).toList();
+        List<String> managedTopics = desiredState.getTopics().keySet().stream().filter(topicNames::contains).toList();
+        Map<String, TopicDescription> descriptions = kafkaService.describeTopics(managedTopics);
         Map<String, List<ConfigEntry>> topicConfigs = fetchTopicConfigurations(topicNames);
 
         desiredState.getTopics().forEach((key, value) -> {
@@ -74,6 +94,21 @@ public class PlanManager {
             } else {
                 LOG.info("[PLAN] Topic {} exists, it will not be created.", key);
                 topicPlan.setAction(PlanAction.NO_CHANGE);
+                TopicDescription description = descriptions.get(key);
+                if (description == null || description.partitions().isEmpty()) {
+                    throw new KafkaExecutionException("Cannot plan topic partitions.", "Missing partition metadata for topic " + key + ".");
+                }
+                int currentCount = description.partitions().size();
+                if (value.getPartitions() < currentCount) {
+                    throw new ValidationException("Decreasing partitions is not supported (topic: " + key + ", "
+                            + currentCount + " -> " + value.getPartitions() + ").");
+                }
+                if (value.getPartitions() > currentCount) {
+                    topicPlan.setPartitionPlan(new TopicPartitionPlan.Builder().setAction(PlanAction.UPDATE)
+                            .setPreviousCount(currentCount).setTargetCount(value.getPartitions()).build());
+                    topicPlan.setAction(PlanAction.UPDATE);
+                }
+                LogUtil.printReplicationWarning(key, value, description);
                 planTopicConfigurations(key, value, topicConfigs.get(key), topicPlan);
             }
 

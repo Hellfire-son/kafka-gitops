@@ -10,6 +10,7 @@ import com.devshawn.kafka.gitops.domain.state.TopicDetails;
 import com.devshawn.kafka.gitops.enums.PlanAction;
 import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
 import com.devshawn.kafka.gitops.exception.WritePlanOutputException;
+import org.apache.kafka.clients.admin.TopicDescription;
 import picocli.CommandLine;
 
 public final class LogUtil {
@@ -50,8 +51,12 @@ public final class LogUtil {
                 break;
             case UPDATE:
                 System.out.println(yellow(String.format("~ [TOPIC] %s", topicPlan.getName())));
-                System.out.println(yellow("\t~ configs:"));
-                topicPlan.getTopicConfigPlans().forEach(LogUtil::printTopicConfigPlan);
+                topicPlan.getPartitionPlan().ifPresent(partitions -> System.out.println(yellow(String.format(
+                        "\t~ partitions: %s -> %s", partitions.getPreviousCount(), partitions.getTargetCount()))));
+                if (!topicPlan.getTopicConfigPlans().isEmpty()) {
+                    System.out.println(yellow("\t~ configs:"));
+                    topicPlan.getTopicConfigPlans().forEach(LogUtil::printTopicConfigPlan);
+                }
                 System.out.println("\n");
                 break;
             case REMOVE:
@@ -69,6 +74,17 @@ public final class LogUtil {
             topicDetails.getConfigs().forEach((key, value) -> System.out.println(green(String.format(
                     "\t\t+ %s: [default] -> %s", key, TopicConfigSecurity.isSensitive(key) ? "[redacted]" : value))));
         }
+    }
+
+    public static void printReplicationWarning(String topic, TopicDetails desired, TopicDescription current) {
+        desired.getReplication().ifPresent(replication -> {
+            java.util.Set<Integer> actual = current.partitions().stream().map(p -> p.replicas().size())
+                    .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new));
+            if (actual.stream().anyMatch(count -> !count.equals(replication))) {
+                System.out.printf("[WARNING] Topic %s has replication factors %s, desired %s. "
+                        + "Replication factor changes are not supported yet; replicas will not be changed.%n", topic, actual, replication);
+            }
+        });
     }
 
     private static void printTopicConfigPlan(TopicConfigPlan topicConfigPlan) {

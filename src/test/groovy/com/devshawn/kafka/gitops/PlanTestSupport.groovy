@@ -14,6 +14,9 @@ import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.clients.admin.Config
 import org.apache.kafka.clients.admin.ConfigEntry
 import org.apache.kafka.clients.admin.TopicListing
+import org.apache.kafka.clients.admin.TopicDescription
+import org.apache.kafka.common.Node
+import org.apache.kafka.common.TopicPartitionInfo
 import org.apache.kafka.common.acl.AclBinding
 import org.apache.kafka.common.config.ConfigResource
 
@@ -58,6 +61,10 @@ class TestKafkaService extends KafkaService {
     List<String> deletedTopics = []
     List<TopicDetails> createdTopics = []
     List<AclBinding> acls = []
+    Map<String, Integer> partitionCounts = [:]
+    Map<String, Integer> replicationCounts = [:]
+    List<Map> partitionChanges = []
+    List<List<String>> metadataReads = []
 
     TestKafkaService() {
         super(new KafkaGitopsConfig.Builder().build())
@@ -65,6 +72,27 @@ class TestKafkaService extends KafkaService {
 
     @Override
     List<TopicListing> getTopics() { topics }
+
+    @Override
+    Map<String, TopicDescription> describeTopics(List<String> names) {
+        metadataReads.add(new ArrayList<>(names))
+        names.findAll { name -> topics.any { it.name() == name } }.collectEntries { name ->
+            def nodes = (0..<replicationCounts.getOrDefault(name, 1)).collect { new Node(it, 'unused-host', 1) }
+            [(name): new TopicDescription(name, false, (0..<partitionCounts.getOrDefault(name, 1)).collect {
+                new TopicPartitionInfo(it, nodes.first(), nodes, nodes)
+            })]
+        }
+    }
+
+    @Override
+    boolean increaseTopicPartitions(String name, int previousCount, int targetCount) {
+        if (partitionCounts.getOrDefault(name, 1) == targetCount) {
+            return false
+        }
+        partitionChanges.add([name: name, previousCount: previousCount, targetCount: targetCount])
+        partitionCounts[name] = targetCount
+        true
+    }
 
     @Override
     Map<ConfigResource, Config> describeConfigsForTopics(List<String> names) {

@@ -26,6 +26,9 @@ class PlanFixturesSpec extends Specification {
         ]
         def stateFile = new ParserService(resource(yaml + '.yaml')).parseStateFile()
         def state = new DesiredState.Builder().putAllTopics(stateFile.topics).build()
+        // These golden cases exercise configs. Keep their partition metadata aligned with their input;
+        // partition changes and shrink rejection are covered independently in PartitionPlanSpec.
+        state.topics.each { name, details -> kafka.partitionCounts[name] = details.partitions }
         def builder = new DesiredPlan.Builder()
         def expected = mapper().readValue(resource(fixture + '-plan.json'), DesiredPlan)
 

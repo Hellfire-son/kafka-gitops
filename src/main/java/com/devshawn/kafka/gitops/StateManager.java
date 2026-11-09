@@ -2,7 +2,6 @@ package com.devshawn.kafka.gitops;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
-import com.devshawn.kafka.gitops.config.KafkaGitopsConfig;
 import com.devshawn.kafka.gitops.config.KafkaGitopsConfigLoader;
 import com.devshawn.kafka.gitops.config.ManagerConfig;
 import com.devshawn.kafka.gitops.domain.confluent.ServiceAccount;
@@ -58,10 +57,14 @@ public class StateManager {
     private boolean describeAclEnabled = false;
 
     public StateManager(ManagerConfig managerConfig, ParserService parserService) {
+        this(managerConfig, parserService, null);
+    }
+
+    // Package-local injection keeps workflow tests independent of connection configuration and Kafka.
+    StateManager(ManagerConfig managerConfig, ParserService parserService, KafkaService suppliedKafkaService) {
         initializeLogger(managerConfig.isVerboseRequested());
         ObjectMapper objectMapper = initializeObjectMapper();
-        KafkaGitopsConfig config = KafkaGitopsConfigLoader.load();
-        KafkaService kafkaService = new KafkaService(config);
+        KafkaService kafkaService = suppliedKafkaService != null ? suppliedKafkaService : new KafkaService(KafkaGitopsConfigLoader.load());
 
         this.managerConfig = managerConfig;
         this.parserService = parserService;
@@ -345,6 +348,11 @@ public class StateManager {
     }
 
     private void validateTopics(DesiredStateFile desiredStateFile) {
+        desiredStateFile.getTopics().forEach((name, details) -> {
+            if (details.getPartitions() < 1) {
+                throw new ValidationException("The partition count must be a positive integer (topic: " + name + ").");
+            }
+        });
         Optional<Integer> defaultReplication = StateUtil.fetchReplication(desiredStateFile);
         if (defaultReplication.isEmpty()) {
             desiredStateFile.getTopics().forEach((name, details) -> {

@@ -25,6 +25,9 @@ public final class TopicPlanSerializer extends StdSerializer<TopicPlan> {
         generator.writeObjectField("action", topic.getAction());
         generator.writeObjectField("topicDetails", topic.getTopicDetails().orElse(null));
         generator.writeObjectField("topicConfigPlans", topic.getTopicConfigPlans());
+        if (topic.getPartitionPlan().isPresent()) {
+            generator.writeObjectField("partitionPlan", topic.getPartitionPlan().get());
+        }
         generator.writeEndObject();
     }
 }
