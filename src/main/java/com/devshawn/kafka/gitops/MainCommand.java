@@ -4,6 +4,8 @@ import com.devshawn.kafka.gitops.cli.AccountCommand;
 import com.devshawn.kafka.gitops.cli.ApplyCommand;
 import com.devshawn.kafka.gitops.cli.PlanCommand;
 import com.devshawn.kafka.gitops.cli.ValidateCommand;
+import com.devshawn.kafka.gitops.config.ManagerConfig;
+import com.devshawn.kafka.gitops.service.ParserService;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -22,6 +24,25 @@ import java.util.concurrent.Callable;
         },
         description = "Manage Kafka resources with a desired state file.")
 public class MainCommand implements Callable<Integer> {
+    @FunctionalInterface
+    interface StateManagerFactory {
+        StateManager create(ManagerConfig config, ParserService parser);
+    }
+
+    private final StateManagerFactory stateManagers;
+
+    public MainCommand() {
+        this(StateManager::new);
+    }
+
+    // Test/application embedding only. There is no CLI, environment or JSON mechanism to replace this factory.
+    MainCommand(StateManagerFactory stateManagers) {
+        this.stateManagers = java.util.Objects.requireNonNull(stateManagers);
+    }
+
+    public StateManager createStateManager(ManagerConfig config, ParserService parser) {
+        return stateManagers.create(config, parser);
+    }
 
     @Option(names = {"-c", "--command-config"}, paramLabel = "<file>",
             description = "Command config properties file.")

@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Internal execution contract. Production CLI must not invoke an implementation before Stage 6B3C.
+/** Internal execution contract. Production CLI remains blocked until all live safety evidence can be verified.
  * Implementations must recheck deadline, permissions and live preconditions; READY is not a durable capability.
  * ACCEPTED acknowledges an RPC only. COMPLETED requires observed assignments, ISR and no active reassignment.
  * Timeout/interruption never implies cancellation or rollback of already accepted Kafka work.
@@ -22,8 +22,8 @@ public interface ReassignmentExecutor {
         TIMEOUT, INTERRUPTED, PARTIAL_FAILURE, INTERNAL, UNKNOWN, PREFLIGHT_BLOCKED, CONFLICT, NOT_SUBMITTED,
         RPC_TIMEOUT, DEADLINE_EXCEEDED }
 
-    /** SENT means this process attempted submission, not proof that Kafka accepted it. */
-    enum Submission { NOT_SENT, SENT, OBSERVED }
+    /** SENT means an attempted submission, not acceptance. UNKNOWN means the integration lost that evidence. */
+    enum Submission { NOT_SENT, SENT, OBSERVED, UNKNOWN }
 
     record PreparedOperation(String topicName, TopicReplicationPlan plan, ReplicationSafetyResult preflight) {
         public PreparedOperation {

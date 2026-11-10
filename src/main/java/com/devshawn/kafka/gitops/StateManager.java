@@ -27,6 +27,7 @@ import com.devshawn.kafka.gitops.manager.ApplyManager;
 import com.devshawn.kafka.gitops.manager.PlanManager;
 import com.devshawn.kafka.gitops.service.ConfluentCloudService;
 import com.devshawn.kafka.gitops.service.KafkaService;
+import com.devshawn.kafka.gitops.service.ReplicationApplication;
 import com.devshawn.kafka.gitops.service.ParserService;
 import com.devshawn.kafka.gitops.service.RoleService;
 import com.devshawn.kafka.gitops.util.LogUtil;
@@ -62,6 +63,11 @@ public class StateManager {
 
     // Package-local injection keeps workflow tests independent of connection configuration and Kafka.
     StateManager(ManagerConfig managerConfig, ParserService parserService, KafkaService suppliedKafkaService) {
+        this(managerConfig, parserService, suppliedKafkaService, null);
+    }
+
+    StateManager(ManagerConfig managerConfig, ParserService parserService, KafkaService suppliedKafkaService,
+                 ReplicationApplication replicationApplication) {
         initializeLogger(managerConfig.isVerboseRequested());
         ObjectMapper objectMapper = initializeObjectMapper();
         KafkaService kafkaService = suppliedKafkaService != null ? suppliedKafkaService : new KafkaService(KafkaGitopsConfigLoader.load());
@@ -71,7 +77,7 @@ public class StateManager {
         this.roleService = new RoleService();
         this.confluentCloudService = new ConfluentCloudService(objectMapper);
         this.planManager = new PlanManager(managerConfig, kafkaService, objectMapper);
-        this.applyManager = new ApplyManager(managerConfig, kafkaService);
+        this.applyManager = new ApplyManager(managerConfig, kafkaService, replicationApplication);
     }
 
     public DesiredStateFile getAndValidateStateFile() {
@@ -115,13 +121,7 @@ public class StateManager {
         planManager.validatePlanHasChanges(desiredPlan, managerConfig.isDeleteDisabled(),
                 managerConfig.isSkipAclsDisabled(), managerConfig.isSkipTopicsDisabled());
 
-        if (!managerConfig.isSkipTopicsDisabled()) {
-            applyManager.applyTopics(desiredPlan);
-        }
-
-        if (!managerConfig.isSkipAclsDisabled()) {
-            applyManager.applyAcls(desiredPlan);
-        }
+        applyManager.applyPlan(desiredPlan);
 
         return desiredPlan;
     }

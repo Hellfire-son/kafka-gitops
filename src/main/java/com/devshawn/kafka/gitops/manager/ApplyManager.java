@@ -14,6 +14,9 @@ import com.devshawn.kafka.gitops.exception.ReplicationPreflightException;
 import com.devshawn.kafka.gitops.domain.plan.ReplicationSafetyResult;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot;
 import com.devshawn.kafka.gitops.service.ReplicationSafetyPolicy;
+import com.devshawn.kafka.gitops.service.ReplicationApplication;
+import com.devshawn.kafka.gitops.service.ReassignmentExecutor;
+import com.devshawn.kafka.gitops.exception.ReplicationExecutionException;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -25,10 +28,50 @@ public class ApplyManager {
 
     private final ManagerConfig managerConfig;
     private final KafkaService kafkaService;
+    private final ReplicationApplication replicationApplication;
 
     public ApplyManager(ManagerConfig managerConfig, KafkaService kafkaService) {
+        this(managerConfig, kafkaService, null);
+    }
+
+    /** Explicit Java integration seam. Default CLI construction does not enable RF execution. */
+    public ApplyManager(ManagerConfig managerConfig, KafkaService kafkaService, ReplicationApplication replicationApplication) {
         this.managerConfig = managerConfig;
         this.kafkaService = kafkaService;
+        this.replicationApplication = replicationApplication;
+    }
+
+    public void applyPlan(DesiredPlan plan) {
+        boolean rf = plan.getTopicPlans().stream().anyMatch(t -> t.getReplicationPlan().isPresent());
+        if (replicationApplication == null || !rf || managerConfig.isSkipTopicsDisabled()) {
+            if (!managerConfig.isSkipTopicsDisabled()) applyTopics(plan);
+            if (!managerConfig.isSkipAclsDisabled()) applyAcls(plan);
+            return;
+        }
+        validatePermissions();
+        PlanValidation.validate(plan);
+        var permissions = new ReplicationSafetyPolicy.Permissions(managerConfig.isManageReplicationRequested(),
+                managerConfig.isAllowReplicationDecreaseRequested(), managerConfig.isDeleteDisabled());
+        var policy = new ReplicationSafetyPolicy();
+        List<TopicPlan> topics = plan.getTopicPlans().stream().filter(t -> t.getReplicationPlan().isPresent()).toList();
+        if (topics.stream().anyMatch(t -> !policy.permissions(t.getReplicationPlan().orElseThrow(), permissions).isEmpty())) {
+            Map<String, ReplicationSafetyResult> results = new TreeMap<>();
+            topics.forEach(t -> results.put(t.getName(), policy.blockedBeforeMetadata(t.getReplicationPlan().orElseThrow(),
+                    policy.permissions(t.getReplicationPlan().orElseThrow(), permissions))));
+            throw new ReplicationPreflightException(results);
+        }
+        // Other partition prerequisites must also pass before RF writes can start.
+        preflightPartitions(plan);
+        ReassignmentExecutor.ExecutionResult result = replicationApplication.apply(topics, permissions);
+        if (result.state() != ReassignmentExecutor.State.COMPLETED) {
+            throw new ReplicationExecutionException(result, ReplicationExecutionException.Phase.EXECUTION);
+        }
+        try {
+            applyTopicOperations(plan, true);
+            if (!managerConfig.isSkipAclsDisabled()) applyAclOperations(plan);
+        } catch (RuntimeException ex) {
+            throw new ReplicationExecutionException(result, ReplicationExecutionException.Phase.FOLLOWUP);
+        }
     }
 
     public void applyTopics(DesiredPlan desiredPlan) {
@@ -38,6 +81,11 @@ public class ApplyManager {
         }
         PlanValidation.validate(desiredPlan);
         preflightReplication(desiredPlan);
+        preflightPartitions(desiredPlan);
+        applyTopicOperations(desiredPlan, false);
+    }
+
+    private void preflightPartitions(DesiredPlan desiredPlan) {
         // Check all partition preconditions before any topic is created, deleted or reconfigured.
         List<String> names = desiredPlan.getTopicPlans().stream().filter(t -> t.getPartitionPlan().isPresent())
                 .map(TopicPlan::getName).toList();
@@ -55,13 +103,16 @@ public class ApplyManager {
             }
             topic.getTopicDetails().ifPresent(details -> LogUtil.printReplicationWarning(topic.getName(), details, current));
         }));
+    }
+
+    private void applyTopicOperations(DesiredPlan desiredPlan, boolean replicationCompleted) {
         desiredPlan.getTopicPlans().forEach(topicPlan -> {
             if (topicPlan.getAction() == PlanAction.ADD) {
                 LogUtil.printTopicPreApply(topicPlan);
                 kafkaService.createTopic(topicPlan.getName(), topicPlan.getTopicDetails().orElseThrow());
                 LogUtil.printPostApply();
             } else if (topicPlan.getAction() == PlanAction.UPDATE) {
-                LogUtil.printTopicPreApply(topicPlan);
+                LogUtil.printTopicPreApply(topicPlan, replicationCompleted && topicPlan.getReplicationPlan().isPresent());
                 topicPlan.getPartitionPlan().ifPresent(partitions -> {
                     // Re-check immediately before the write; the service also verifies the resulting metadata.
                     boolean changed = kafkaService.increaseTopicPartitions(topicPlan.getName(), partitions.getPreviousCount(),
@@ -111,6 +162,10 @@ public class ApplyManager {
             PlanValidation.validate(desiredPlan);
             preflightReplication(desiredPlan);
         }
+        applyAclOperations(desiredPlan);
+    }
+
+    private void applyAclOperations(DesiredPlan desiredPlan) {
         desiredPlan.getAclPlans().forEach(aclPlan -> {
             if (aclPlan.getAction() == PlanAction.ADD) {
                 LogUtil.printAclPreApply(aclPlan);

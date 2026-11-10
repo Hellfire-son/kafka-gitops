@@ -41,7 +41,7 @@ public class ApplyCommand implements Callable<Integer> {
             }
             System.out.println("Executing apply...\n");
             ParserService parserService = new ParserService(parent.getStateFile());
-            StateManager stateManager = new StateManager(generateStateManagerConfig(), parserService);
+            StateManager stateManager = parent.createStateManager(generateStateManagerConfig(), parserService);
             DesiredPlan desiredPlan = stateManager.apply();
             LogUtil.printApplyOverview(PlanUtil.getOverview(desiredPlan,
                     parent.isDeleteDisabled(),

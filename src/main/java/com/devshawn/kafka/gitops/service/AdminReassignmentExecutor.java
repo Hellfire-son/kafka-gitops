@@ -163,6 +163,15 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
         return new ExecutionResult(work.keySet(), results);
     }
 
+    /** Independent terminal read, used by the integration boundary before reporting CLI success. */
+    boolean verifyCompleted(Request request) throws Exception {
+        Map<TopicPartition, Work> work = new TreeMap<>(ORDER);
+        request.operations().forEach(o -> o.plan().getAssignments().forEach(a -> work.put(new TopicPartition(o.topicName(), a.getPartition()), new Work(o, a))));
+        Observation observation = observe(work, request.deadlineNanos());
+        return work.entrySet().stream().allMatch(e -> classify(e.getValue().assignment,
+                partition(observation, e.getKey()), observation.active().get(e.getKey())) == Position.TARGET_COMPLETE);
+    }
+
     private Observation observe(Map<TopicPartition, Work> work, long deadline) throws Exception {
         long rpc = rpcDeadline(deadline);
         DescribeClusterResult cluster = admin.describeCluster(new DescribeClusterOptions().timeoutMs(timeoutMs(rpc)));
@@ -318,7 +327,7 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
     private static void uncertain(Map<TopicPartition, Work> work, ErrorCategory category) {
         work.values().stream().filter(w -> !w.failed && w.state != State.COMPLETED).forEach(w -> { w.state = State.UNKNOWN; w.error = category; });
     }
-    private static ErrorCategory category(Throwable error) {
+    static ErrorCategory category(Throwable error) {
         Throwable cause = error;
         while (cause instanceof ExecutionException && cause.getCause() != null) cause = cause.getCause();
         if (cause instanceof Failure failure) return failure.category;

@@ -250,6 +250,11 @@ public class KafkaService {
         return readReplicationSnapshot(names, true);
     }
 
+    /** Explicit internal binding only; ordinary CLI retains its closed production RF path. */
+    public ReplicationApplication replicationApplication() {
+        return new AdminReplicationApplication(this::buildAdminClient);
+    }
+
     private ReplicationClusterSnapshot readReplicationSnapshot(Set<String> names, boolean preflight) {
         if (names.isEmpty()) {
             throw new IllegalArgumentException("An RF snapshot requires at least one topic.");

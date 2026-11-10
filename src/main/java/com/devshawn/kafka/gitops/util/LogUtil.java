@@ -45,6 +45,10 @@ public final class LogUtil {
      * Plan
      */
     private static void printTopicPlan(TopicPlan topicPlan) {
+        printTopicPlan(topicPlan, false);
+    }
+
+    private static void printTopicPlan(TopicPlan topicPlan, boolean replicationCompleted) {
         switch (topicPlan.getAction()) {
             case ADD:
                 System.out.println(green(String.format("+ [TOPIC] %s", topicPlan.getName())));
@@ -55,7 +59,7 @@ public final class LogUtil {
                 System.out.println(yellow(String.format("~ [TOPIC] %s", topicPlan.getName())));
                 topicPlan.getPartitionPlan().ifPresent(partitions -> System.out.println(yellow(String.format(
                         "\t~ partitions: %s -> %s", partitions.getPreviousCount(), partitions.getTargetCount()))));
-                topicPlan.getReplicationPlan().ifPresent(LogUtil::printReplicationPlan);
+                topicPlan.getReplicationPlan().ifPresent(rf -> printReplicationPlan(rf, replicationCompleted));
                 if (!topicPlan.getTopicConfigPlans().isEmpty()) {
                     System.out.println(yellow("\t~ configs:"));
                     topicPlan.getTopicConfigPlans().forEach(LogUtil::printTopicConfigPlan);
@@ -69,20 +73,21 @@ public final class LogUtil {
         }
     }
 
-    private static void printReplicationPlan(TopicReplicationPlan plan) {
+    private static void printReplicationPlan(TopicReplicationPlan plan, boolean completed) {
         java.util.Set<Integer> previous = plan.getAssignments().stream().map(a -> a.getPreviousReplicas().size())
                 .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new));
         String from = previous.size() == 1 ? previous.iterator().next().toString() : "mixed " + previous;
         System.out.println(yellow(String.format("\t~ replication: %s -> %s", from, plan.getTargetReplicationFactor())));
         plan.getAssignments().stream().sorted(java.util.Comparator.comparingInt(PartitionReplicaAssignment::getPartition))
                 .forEach(a -> System.out.printf("\t\tpartition %s: %s -> %s%n", a.getPartition(), a.getPreviousReplicas(), a.getTargetReplicas()));
-        if (plan.requiresDecreaseApproval()) {
+        if (!completed && plan.requiresDecreaseApproval()) {
             System.out.println("\t[WARNING] RF decrease requires independent apply permission, complete ISR, min.insync.replicas and fresh preflight checks; --no-delete forbids it.");
         }
         if (plan.getRackPolicy() == com.devshawn.kafka.gitops.enums.RackAwarenessPolicy.BROKER_ONLY) {
             System.out.println("\t[WARNING] BROKER_ONLY: no rack failure protection is established.");
         }
-        System.out.println("\t[WARNING] RF preview only; application remains unavailable in Stage 6B2.");
+        if (completed) System.out.println("\t[COMPLETED] Replication assignments and ISR verified.");
+        else System.out.println("\t[WARNING] RF preview only; application remains unavailable in Stage 6B2.");
     }
 
     private static void printTopicConfigPlanForNewTopics(TopicDetails topicDetails) {
@@ -157,8 +162,12 @@ public final class LogUtil {
      */
 
     public static void printTopicPreApply(TopicPlan topicPlan) {
+        printTopicPreApply(topicPlan, false);
+    }
+
+    public static void printTopicPreApply(TopicPlan topicPlan, boolean replicationCompleted) {
         System.out.printf("Applying: [%s]%n%n", toAction(topicPlan.getAction()));
-        printTopicPlan(topicPlan);
+        printTopicPlan(topicPlan, replicationCompleted);
     }
 
     public static void printAclPreApply(AclPlan aclPlan) {
