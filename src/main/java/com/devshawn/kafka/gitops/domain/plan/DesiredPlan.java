@@ -1,6 +1,7 @@
 package com.devshawn.kafka.gitops.domain.plan;
 
 import com.devshawn.kafka.gitops.enums.PlanAction;
+import com.devshawn.kafka.gitops.util.PlanValidation;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import org.inferred.freebuilder.FreeBuilder;
 
@@ -15,6 +16,8 @@ public interface DesiredPlan {
     List<AclPlan> getAclPlans();
 
     default DesiredPlan toChangesOnlyPlan() {
+        // Validate before filtering: a hidden RF operation must never disappear as NO_CHANGE.
+        PlanValidation.validateReplicationPlans(this);
         DesiredPlan.Builder builder = new DesiredPlan.Builder();
         getTopicPlans().stream().filter(it -> !it.getAction().equals(PlanAction.NO_CHANGE)).map(TopicPlan::toChangesOnlyPlan).forEach(builder::addTopicPlans);
         getAclPlans().stream().filter(it -> !it.getAction().equals(PlanAction.NO_CHANGE)).forEach(builder::addAclPlans);

@@ -30,7 +30,7 @@ public class ApplyManager {
         if (managerConfig.isSkipTopicsDisabled()) {
             return;
         }
-        PlanValidation.validate(desiredPlan);
+        PlanValidation.validateForApply(desiredPlan);
         // Check all partition preconditions before any topic is created, deleted or reconfigured.
         List<String> names = desiredPlan.getTopicPlans().stream().filter(t -> t.getPartitionPlan().isPresent())
                 .map(TopicPlan::getName).toList();

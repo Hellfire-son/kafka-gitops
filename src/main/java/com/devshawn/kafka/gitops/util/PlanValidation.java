@@ -4,6 +4,7 @@ import com.devshawn.kafka.gitops.domain.plan.DesiredPlan;
 import com.devshawn.kafka.gitops.domain.plan.TopicConfigPlan;
 import com.devshawn.kafka.gitops.domain.plan.TopicPlan;
 import com.devshawn.kafka.gitops.enums.PlanAction;
+import com.devshawn.kafka.gitops.exception.ValidationException;
 
 public final class PlanValidation {
     private PlanValidation() {
@@ -15,6 +16,7 @@ public final class PlanValidation {
         for (TopicPlan topic : plan.getTopicPlans()) {
             require(topic != null, "A topic plan must be an object.");
             require(topics.add(topic.getName()), "Duplicate topic operations are unsupported.");
+            ReplicationPlanValidation.validate(topic);
             topic.getTopicDetails().ifPresent(details -> require(details.getPartitions() > 0,
                     "The partition count must be a positive integer."));
             topic.getPartitionPlan().ifPresent(partitions -> {
@@ -31,8 +33,9 @@ public final class PlanValidation {
                 require(topic.getTopicConfigPlans().isEmpty(), "A topic ADD uses topicDetails.configs, not config operations.");
             } else if (topic.getAction() == PlanAction.UPDATE) {
                 require(topic.getPartitionPlan().isPresent()
+                                || topic.getReplicationPlan().isPresent()
                                 || topic.getTopicConfigPlans().stream().anyMatch(config -> config.getAction() != PlanAction.NO_CHANGE),
-                        "A topic UPDATE requires configuration or partition changes.");
+                        "A topic UPDATE requires configuration, partition or replication changes.");
             } else {
                 require(topic.getTopicConfigPlans().stream().allMatch(config -> config.getAction() == PlanAction.NO_CHANGE),
                         "Configuration changes require a topic UPDATE.");
@@ -44,6 +47,17 @@ public final class PlanValidation {
             }
         }
         plan.getAclPlans().forEach(acl -> require(acl.getAction() != PlanAction.UPDATE, "ACL UPDATE is unsupported."));
+    }
+
+    public static void validateReplicationPlans(DesiredPlan plan) {
+        plan.getTopicPlans().forEach(ReplicationPlanValidation::validate);
+    }
+
+    public static void validateForApply(DesiredPlan plan) {
+        validate(plan);
+        if (plan.getTopicPlans().stream().anyMatch(topic -> topic.getReplicationPlan().isPresent())) {
+            throw new ValidationException("Replication plan application is unavailable in Stage 6B1. No topic operations were started.");
+        }
     }
 
     private static void require(boolean condition, String message) {

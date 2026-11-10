@@ -2,6 +2,7 @@ package com.devshawn.kafka.gitops.domain.plan.serialization;
 
 import com.devshawn.kafka.gitops.domain.plan.TopicPlan;
 import com.devshawn.kafka.gitops.util.TopicConfigSecurity;
+import com.devshawn.kafka.gitops.util.ReplicationPlanValidation;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.SerializerProvider;
@@ -20,6 +21,11 @@ public final class TopicPlanSerializer extends StdSerializer<TopicPlan> {
         if (TopicConfigSecurity.hasSensitiveValues(topic)) {
             throw JsonMappingException.from(generator, "Confidential configuration values cannot be exported. Apply directly from the state file.");
         }
+        try {
+            ReplicationPlanValidation.validate(topic);
+        } catch (ReplicationPlanValidation.InvalidReplicationPlanException ex) {
+            throw JsonMappingException.from(generator, ex.getMessage());
+        }
         generator.writeStartObject();
         generator.writeStringField("name", topic.getName());
         generator.writeObjectField("action", topic.getAction());
@@ -27,6 +33,9 @@ public final class TopicPlanSerializer extends StdSerializer<TopicPlan> {
         generator.writeObjectField("topicConfigPlans", topic.getTopicConfigPlans());
         if (topic.getPartitionPlan().isPresent()) {
             generator.writeObjectField("partitionPlan", topic.getPartitionPlan().get());
+        }
+        if (topic.getReplicationPlan().isPresent()) {
+            generator.writeObjectField("replicationPlan", topic.getReplicationPlan().get());
         }
         generator.writeEndObject();
     }

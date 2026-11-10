@@ -19,12 +19,14 @@ import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
 import com.devshawn.kafka.gitops.service.KafkaService;
 import com.devshawn.kafka.gitops.util.PlanUtil;
 import com.devshawn.kafka.gitops.util.PlanValidation;
+import com.devshawn.kafka.gitops.util.ReplicationPlanValidation.InvalidReplicationPlanException;
 import com.devshawn.kafka.gitops.util.TopicConfigSecurity;
 import com.devshawn.kafka.gitops.util.LogUtil;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.cfg.CoercionAction;
 import com.fasterxml.jackson.databind.cfg.CoercionInputShape;
 import com.fasterxml.jackson.databind.type.LogicalType;
@@ -251,6 +253,13 @@ public class PlanManager {
                 return plan;
             } catch (FileNotFoundException ex) {
                 throw new ReadPlanInputException("The specified plan file could not be found.");
+            } catch (InvalidReplicationPlanException ex) {
+                throw new ReadPlanInputException("Invalid replication plan: " + ex.getMessage());
+            } catch (JsonMappingException ex) {
+                if (ex.getPath().stream().anyMatch(reference -> "replicationPlan".equals(reference.getFieldName()))) {
+                    throw new ReadPlanInputException("Invalid replicationPlan structure, field type, required field or operation. Only schemaVersion 1 and UPDATE are supported.");
+                }
+                throw new ReadPlanInputException();
             } catch (IOException ex) {
                 throw new ReadPlanInputException();
             } catch (IllegalArgumentException ex) {
@@ -271,8 +280,10 @@ public class PlanManager {
                 try(FileWriter writer = new FileWriter(planFile)) {
                     writer.write(output);
                 }
+            } catch (InvalidReplicationPlanException ex) {
+                throw new WritePlanOutputException("Invalid replication plan: " + ex.getMessage());
             } catch (JsonProcessingException ex) {
-                throw new WritePlanOutputException("Plan serialization refused. Confidential values cannot be exported; apply directly from the state file.");
+                throw new WritePlanOutputException("Plan serialization refused: invalid structure or confidential values. Confidential values cannot be exported; apply directly from the state file.");
             } catch (IOException ex) {
                 throw new WritePlanOutputException(ex.getMessage());
             }
