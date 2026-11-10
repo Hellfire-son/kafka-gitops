@@ -5,6 +5,8 @@ import com.devshawn.kafka.gitops.domain.plan.DesiredPlan;
 import com.devshawn.kafka.gitops.domain.plan.PlanOverview;
 import com.devshawn.kafka.gitops.domain.plan.TopicConfigPlan;
 import com.devshawn.kafka.gitops.domain.plan.TopicPlan;
+import com.devshawn.kafka.gitops.domain.plan.TopicReplicationPlan;
+import com.devshawn.kafka.gitops.domain.plan.PartitionReplicaAssignment;
 import com.devshawn.kafka.gitops.domain.state.AclDetails;
 import com.devshawn.kafka.gitops.domain.state.TopicDetails;
 import com.devshawn.kafka.gitops.enums.PlanAction;
@@ -53,6 +55,7 @@ public final class LogUtil {
                 System.out.println(yellow(String.format("~ [TOPIC] %s", topicPlan.getName())));
                 topicPlan.getPartitionPlan().ifPresent(partitions -> System.out.println(yellow(String.format(
                         "\t~ partitions: %s -> %s", partitions.getPreviousCount(), partitions.getTargetCount()))));
+                topicPlan.getReplicationPlan().ifPresent(LogUtil::printReplicationPlan);
                 if (!topicPlan.getTopicConfigPlans().isEmpty()) {
                     System.out.println(yellow("\t~ configs:"));
                     topicPlan.getTopicConfigPlans().forEach(LogUtil::printTopicConfigPlan);
@@ -64,6 +67,22 @@ public final class LogUtil {
                 System.out.println("\n");
                 break;
         }
+    }
+
+    private static void printReplicationPlan(TopicReplicationPlan plan) {
+        java.util.Set<Integer> previous = plan.getAssignments().stream().map(a -> a.getPreviousReplicas().size())
+                .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new));
+        String from = previous.size() == 1 ? previous.iterator().next().toString() : "mixed " + previous;
+        System.out.println(yellow(String.format("\t~ replication: %s -> %s", from, plan.getTargetReplicationFactor())));
+        plan.getAssignments().stream().sorted(java.util.Comparator.comparingInt(PartitionReplicaAssignment::getPartition))
+                .forEach(a -> System.out.printf("\t\tpartition %s: %s -> %s%n", a.getPartition(), a.getPreviousReplicas(), a.getTargetReplicas()));
+        if (plan.requiresDecreaseApproval()) {
+            System.out.println("\t[WARNING] RF decrease requires independent apply permission, complete ISR, min.insync.replicas and fresh preflight checks; --no-delete forbids it.");
+        }
+        if (plan.getRackPolicy() == com.devshawn.kafka.gitops.enums.RackAwarenessPolicy.BROKER_ONLY) {
+            System.out.println("\t[WARNING] BROKER_ONLY: no rack failure protection is established.");
+        }
+        System.out.println("\t[WARNING] RF preview only; application remains unavailable in Stage 6B2.");
     }
 
     private static void printTopicConfigPlanForNewTopics(TopicDetails topicDetails) {

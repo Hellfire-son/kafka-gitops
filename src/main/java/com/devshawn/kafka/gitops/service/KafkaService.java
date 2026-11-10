@@ -1,6 +1,7 @@
 package com.devshawn.kafka.gitops.service;
 
 import com.devshawn.kafka.gitops.config.KafkaGitopsConfig;
+import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot;
 import com.devshawn.kafka.gitops.domain.state.TopicDetails;
 import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -31,6 +32,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -236,6 +239,35 @@ public class KafkaService {
         // Kafka/server exception text may contain configuration values. Report only its category.
         return new KafkaExecutionException("Error while " + operation + ".", "Failure type: " + cause.getClass().getSimpleName()
                 + ". No partition result was confirmed; changes may be partially applied. Re-plan before retrying.");
+    }
+
+    /** One read-only Admin session for the complete RF planning snapshot. */
+    public ReplicationClusterSnapshot readReplicationSnapshot(Set<String> names) {
+        if (names.isEmpty()) {
+            throw new IllegalArgumentException("An RF snapshot requires at least one topic.");
+        }
+        Admin admin = null;
+        try {
+            int timeout = partitionTimeoutMs();
+            admin = buildAdminClient();
+            return ReplicationMetadataReader.read(admin, new TreeSet<>(names), timeout);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new KafkaExecutionException("RF metadata collection interrupted.", "No RF changes were sent.");
+        } catch (KafkaExecutionException ex) {
+            // Reader diagnostics are fixed strings; buildAdminClient diagnostics may contain raw configuration.
+            throw new KafkaExecutionException("RF metadata collection failed.", "Cannot confirm the complete RF snapshot. No RF changes were sent.");
+        } catch (ExecutionException | TimeoutException | RuntimeException ex) {
+            throw new KafkaExecutionException("RF metadata collection failed.", "Cannot confirm the complete RF snapshot. No RF changes were sent.");
+        } finally {
+            if (admin != null) {
+                try {
+                    admin.close(Duration.ZERO);
+                } catch (RuntimeException ignored) {
+                    // Do not replace safe diagnostics with a close exception containing external response text.
+                }
+            }
+        }
     }
 
     protected Admin buildAdminClient() {

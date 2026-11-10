@@ -1,6 +1,7 @@
 package com.devshawn.kafka.gitops.config;
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.devshawn.kafka.gitops.enums.RackAwarenessPolicy;
 import org.inferred.freebuilder.FreeBuilder;
 
 import java.io.File;
@@ -26,6 +27,17 @@ public interface ManagerConfig {
 
     Optional<File> getPlanFile();
 
+    boolean isManageReplicationRequested();
+
+    boolean isAllowReplicationDecreaseRequested();
+
+    RackAwarenessPolicy getReplicationRackPolicy();
+
     class Builder extends ManagerConfig_Builder {
+        public Builder() {
+            setManageReplicationRequested(false);
+            setAllowReplicationDecreaseRequested(false);
+            setReplicationRackPolicy(RackAwarenessPolicy.RACK_AWARE);
+        }
     }
 }

@@ -7,6 +7,8 @@ import com.devshawn.kafka.gitops.domain.plan.PlanOverview;
 import com.devshawn.kafka.gitops.domain.plan.TopicConfigPlan;
 import com.devshawn.kafka.gitops.domain.plan.TopicPlan;
 import com.devshawn.kafka.gitops.domain.plan.TopicPartitionPlan;
+import com.devshawn.kafka.gitops.domain.plan.TopicReplicationPlan;
+import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot;
 import com.devshawn.kafka.gitops.domain.state.AclDetails;
 import com.devshawn.kafka.gitops.domain.state.DesiredState;
 import com.devshawn.kafka.gitops.domain.state.TopicDetails;
@@ -17,6 +19,7 @@ import com.devshawn.kafka.gitops.exception.WritePlanOutputException;
 import com.devshawn.kafka.gitops.exception.ValidationException;
 import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
 import com.devshawn.kafka.gitops.service.KafkaService;
+import com.devshawn.kafka.gitops.service.ReplicaAssignmentPlanner;
 import com.devshawn.kafka.gitops.util.PlanUtil;
 import com.devshawn.kafka.gitops.util.PlanValidation;
 import com.devshawn.kafka.gitops.util.ReplicationPlanValidation.InvalidReplicationPlanException;
@@ -46,6 +49,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
+import java.util.Comparator;
 
 public class PlanManager {
     private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(PlanManager.class);
@@ -71,6 +76,9 @@ public class PlanManager {
     }
 
     public void planTopics(DesiredState desiredState, DesiredPlan.Builder desiredPlan) {
+        if (managerConfig.isAllowReplicationDecreaseRequested() && !managerConfig.isManageReplicationRequested()) {
+            throw new ValidationException("--allow-replication-decrease requires --manage-replication.");
+        }
         if (managerConfig.isSkipTopicsDisabled()) {
             return;
         }
@@ -84,8 +92,12 @@ public class PlanManager {
         List<String> managedTopics = desiredState.getTopics().keySet().stream().filter(topicNames::contains).toList();
         Map<String, TopicDescription> descriptions = kafkaService.describeTopics(managedTopics);
         Map<String, List<ConfigEntry>> topicConfigs = fetchTopicConfigurations(topicNames);
+        Map<String, TopicReplicationPlan> replications = managerConfig.isManageReplicationRequested()
+                ? planReplications(desiredState, descriptions) : Map.of();
 
-        desiredState.getTopics().forEach((key, value) -> {
+        Map<String, TopicDetails> orderedTopics = managerConfig.isManageReplicationRequested()
+                ? new TreeMap<>(desiredState.getTopics()) : desiredState.getTopics();
+        orderedTopics.forEach((key, value) -> {
             TopicPlan.Builder topicPlan = new TopicPlan.Builder()
                     .setName(key)
                     .setTopicDetails(value);
@@ -110,14 +122,27 @@ public class PlanManager {
                             .setPreviousCount(currentCount).setTargetCount(value.getPartitions()).build());
                     topicPlan.setAction(PlanAction.UPDATE);
                 }
-                LogUtil.printReplicationWarning(key, value, description);
+                if (replications.containsKey(key)) {
+                    topicPlan.setReplicationPlan(replications.get(key)).setAction(PlanAction.UPDATE);
+                } else if (!managerConfig.isManageReplicationRequested()) {
+                    LogUtil.printReplicationWarning(key, value, description);
+                }
                 planTopicConfigurations(key, value, topicConfigs.get(key), topicPlan);
+                if (replications.containsKey(key)) {
+                    TopicPlan built = topicPlan.build();
+                    if (built.getTopicConfigPlans().stream().anyMatch(config -> config.getAction() != PlanAction.NO_CHANGE
+                            && (config.getKey().equals("min.insync.replicas") || config.getKey().contains("throttled")))) {
+                        throw new ValidationException("RF changes cannot be combined with min.insync.replicas or throttle configuration changes. Use separate plans.");
+                    }
+                }
             }
 
             desiredPlan.addTopicPlans(topicPlan.build());
         });
 
-        for (TopicListing currentTopic : topics) {
+        List<TopicListing> orderedCurrent = managerConfig.isManageReplicationRequested()
+                ? topics.stream().sorted(Comparator.comparing(TopicListing::name)).toList() : topics;
+        for (TopicListing currentTopic : orderedCurrent) {
             boolean acceptTopic = desiredState.getPrefixedTopicsToAccept().stream().anyMatch(it -> currentTopic.name().startsWith(it));
             if (!desiredState.getPrefixedTopicsToAccept().isEmpty() && !acceptTopic) {
                 LOG.info("[PLAN] Ignoring non-included topic {} due to prefix", currentTopic.name());
@@ -139,6 +164,50 @@ public class PlanManager {
                 desiredPlan.addTopicPlans(topicPlan);
             }
         }
+        if (managerConfig.isManageReplicationRequested()) {
+            PlanValidation.validate(desiredPlan.build());
+        }
+    }
+
+    private Map<String, TopicReplicationPlan> planReplications(DesiredState desiredState,
+                                                             Map<String, TopicDescription> descriptions) {
+        Map<String, Integer> targets = new TreeMap<>();
+        desiredState.getTopics().forEach((name, details) -> {
+            TopicDescription current = descriptions.get(name);
+            if (current != null && details.getReplication().isPresent()) {
+                int target = details.getReplication().get();
+                if (target <= 0 || target > Short.MAX_VALUE) {
+                    throw new ValidationException("The target RF must be in 1..32767.");
+                }
+                if (current.partitions().stream().anyMatch(p -> p.replicas().size() != target)) {
+                    if (details.getPartitions() != current.partitions().size()) {
+                        throw new ValidationException("partitionPlan and replicationPlan cannot be combined for one topic. Plan RF and partition changes separately.");
+                    }
+                    targets.put(name, target);
+                }
+            }
+        });
+        if (targets.isEmpty()) {
+            return Map.of();
+        }
+        ReplicationClusterSnapshot snapshot = kafkaService.readReplicationSnapshot(targets.keySet());
+        targets.forEach((name, rf) -> {
+            TopicDescription before = descriptions.get(name);
+            var after = snapshot.topics().get(name);
+            if (after == null || !before.topicId().toString().equals(after.topicId())
+                    || before.partitions().size() != after.partitions().size()
+                    || before.partitions().stream().anyMatch(p -> after.partitions().stream().noneMatch(a -> a.id() == p.partition()
+                    && a.replicas().equals(p.replicas().stream().map(node -> node.id()).toList())))) {
+                throw new ValidationException("Topic metadata changed before RF planning. Re-plan.");
+            }
+        });
+        Map<String, TopicReplicationPlan> plans = new ReplicaAssignmentPlanner().plan(snapshot, targets,
+                managerConfig.getReplicationRackPolicy(), managerConfig.isAllowReplicationDecreaseRequested(), managerConfig.isDeleteDisabled());
+        if (plans.values().stream().anyMatch(p -> p.getRackPolicy() == com.devshawn.kafka.gitops.enums.RackAwarenessPolicy.BROKER_ONLY)) {
+            System.out.println("[WARNING] BROKER_ONLY disables rack awareness; rack failure protection is not established.");
+        }
+        System.out.println("[WARNING] RF planning preview only: replica counts do not prove disk capacity. Fencing, placement eligibility and capacity require a fresh apply preflight; RF apply is unavailable.");
+        return plans;
     }
 
     private void planTopicConfigurations(String topicName, TopicDetails topicDetails, List<ConfigEntry> configs, TopicPlan.Builder topicPlan) {
@@ -189,7 +258,8 @@ public class PlanManager {
             }
         });
 
-        configPlans.forEach((key, plan) -> {
+        Map<String, TopicConfigPlan> ordered = managerConfig.isManageReplicationRequested() ? new TreeMap<>(configPlans) : configPlans;
+        ordered.forEach((key, plan) -> {
             LOG.info("[PLAN] Topic {} | [{}] {}", topicName, plan.getAction(), plan.getKey());
             topicPlan.addTopicConfigPlans(plan);
         });
