@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Future contract only. No implementation, construction or invocation in Stage 6B3A.
+/** Internal execution contract. Production CLI must not invoke an implementation before Stage 6B3C.
  * Implementations must recheck deadline, permissions and live preconditions; READY is not a durable capability.
  * ACCEPTED acknowledges an RPC only. COMPLETED requires observed assignments, ISR and no active reassignment.
  * Timeout/interruption never implies cancellation or rollback of already accepted Kafka work.
@@ -19,7 +19,11 @@ public interface ReassignmentExecutor {
 
     enum State { ACCEPTED, RUNNING, COMPLETED, FAILED, UNKNOWN }
     enum ErrorCategory { NONE, VALIDATION, AUTHORIZATION, UNSUPPORTED, STALE_PLAN, BROKER_UNAVAILABLE,
-        TIMEOUT, INTERRUPTED, PARTIAL_FAILURE, INTERNAL, UNKNOWN }
+        TIMEOUT, INTERRUPTED, PARTIAL_FAILURE, INTERNAL, UNKNOWN, PREFLIGHT_BLOCKED, CONFLICT, NOT_SUBMITTED,
+        RPC_TIMEOUT, DEADLINE_EXCEEDED }
+
+    /** SENT means this process attempted submission, not proof that Kafka accepted it. */
+    enum Submission { NOT_SENT, SENT, OBSERVED }
 
     record PreparedOperation(String topicName, TopicReplicationPlan plan, ReplicationSafetyResult preflight) {
         public PreparedOperation {
@@ -49,9 +53,14 @@ public interface ReassignmentExecutor {
         }
     }
 
-    record PartitionOutcome(State state, ErrorCategory error) {
+    record PartitionOutcome(State state, ErrorCategory error, Submission submission, State lastKnownState) {
+        public PartitionOutcome(State state, ErrorCategory error) {
+            this(state, error, Submission.NOT_SENT, state);
+        }
+
         public PartitionOutcome {
-            if (state == null || error == null || ((state == State.COMPLETED || state == State.ACCEPTED || state == State.RUNNING)
+            if (state == null || error == null || submission == null || lastKnownState == null
+                    || ((state == State.COMPLETED || state == State.ACCEPTED || state == State.RUNNING)
                     && error != ErrorCategory.NONE)
                     || ((state == State.FAILED || state == State.UNKNOWN) && error == ErrorCategory.NONE)) {
                 throw new IllegalArgumentException("Invalid reassignment outcome classification.");

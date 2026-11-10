@@ -57,11 +57,23 @@ public final class ReplicationSafetyPolicy {
 
     public ReplicationSafetyResult evaluate(String topicName, TopicReplicationPlan plan, ReplicationClusterSnapshot current,
                                              Permissions permissions, Constraints constraints) {
+        return evaluateForExecution(topicName, plan, current, permissions, constraints, Set.of());
+    }
+
+    /** Already completed partitions are checked against the actual target, never against fabricated original metadata.
+     * All freshness, permission, broker, admission, capacity and feature checks remain mandatory before another batch.
+     * Active reassignments are still forbidden here: the executor must finish observation before sending another batch.
+     */
+    public ReplicationSafetyResult evaluateForExecution(String topicName, TopicReplicationPlan plan, ReplicationClusterSnapshot current,
+                                                       Permissions permissions, Constraints constraints, Set<Integer> completedPartitions) {
         List<Finding> global = new ArrayList<>();
         List<Warning> warnings = new ArrayList<>(List.of(Warning.NON_ATOMIC_SNAPSHOT,
                 Warning.LEADER_NOT_PINNED_IN_SCHEMA_V1, Warning.EXECUTION_UNAVAILABLE));
         try {
             ReplicationPlanValidation.validate(plan);
+            if (completedPartitions == null || completedPartitions.stream().anyMatch(id -> id == null || id < 0 || id >= plan.getPartitionCount())) {
+                throw new IllegalArgumentException("Invalid completed partition scope.");
+            }
         } catch (IllegalArgumentException ex) {
             add(global, STRUCTURE_INVALID, Condition.INVALID);
             return new ReplicationSafetyResult(global, warnings, List.of());
@@ -125,7 +137,8 @@ public final class ReplicationSafetyPolicy {
             if (actual == null) {
                 issues.add(finding(PARTITION_COUNT_CHANGED, Condition.INVALID, partitionId, null));
             } else {
-                if (!assignment.getPreviousReplicas().equals(actual.replicas())) issues.add(finding(PREVIOUS_REPLICAS_CHANGED, Condition.INVALID, partitionId, null));
+                List<Integer> expected = completedPartitions.contains(partitionId) ? assignment.getTargetReplicas() : assignment.getPreviousReplicas();
+                if (!expected.equals(actual.replicas())) issues.add(finding(PREVIOUS_REPLICAS_CHANGED, Condition.INVALID, partitionId, null));
                 if (actual.leader().isEmpty()) issues.add(finding(LEADER_UNKNOWN, Condition.UNKNOWN, partitionId, null));
                 else if (!actual.replicas().contains(actual.leader().getAsInt()) || !actual.isr().contains(actual.leader().getAsInt())) issues.add(finding(LEADER_NOT_IN_ISR, Condition.INVALID, partitionId, null));
                 if (!actual.isr().equals(new HashSet<>(actual.replicas()))) issues.add(finding(ISR_INCOMPLETE, Condition.INVALID, partitionId, null));

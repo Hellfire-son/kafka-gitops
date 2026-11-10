@@ -97,7 +97,7 @@ class ReassignmentExecutorContractSpec extends Specification {
         thrown(IllegalArgumentException)
     }
 
-    void 'executor remains an interface with no implementation or success stub'() {
+    void 'executor contract remains an interface without default execution'() {
         expect:
         ReassignmentExecutor.isInterface()
         ReassignmentExecutor.declaredMethods*.name == ['execute']
