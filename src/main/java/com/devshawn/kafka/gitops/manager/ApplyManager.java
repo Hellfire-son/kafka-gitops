@@ -9,6 +9,11 @@ import com.devshawn.kafka.gitops.service.KafkaService;
 import com.devshawn.kafka.gitops.util.LogUtil;
 import com.devshawn.kafka.gitops.util.PlanValidation;
 import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
+import com.devshawn.kafka.gitops.exception.ValidationException;
+import com.devshawn.kafka.gitops.exception.ReplicationPreflightException;
+import com.devshawn.kafka.gitops.domain.plan.ReplicationSafetyResult;
+import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot;
+import com.devshawn.kafka.gitops.service.ReplicationSafetyPolicy;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -27,10 +32,12 @@ public class ApplyManager {
     }
 
     public void applyTopics(DesiredPlan desiredPlan) {
+        validatePermissions();
         if (managerConfig.isSkipTopicsDisabled()) {
             return;
         }
-        PlanValidation.validateForApply(desiredPlan);
+        PlanValidation.validate(desiredPlan);
+        preflightReplication(desiredPlan);
         // Check all partition preconditions before any topic is created, deleted or reconfigured.
         List<String> names = desiredPlan.getTopicPlans().stream().filter(t -> t.getPartitionPlan().isPresent())
                 .map(TopicPlan::getName).toList();
@@ -97,6 +104,13 @@ public class ApplyManager {
     }
 
     public void applyAcls(DesiredPlan desiredPlan) {
+        validatePermissions();
+        if (desiredPlan.getTopicPlans().stream().anyMatch(t -> t.getReplicationPlan().isPresent())
+                && desiredPlan.getAclPlans().stream().anyMatch(a -> a.getAction() == PlanAction.ADD
+                || (a.getAction() == PlanAction.REMOVE && !managerConfig.isDeleteDisabled()))) {
+            PlanValidation.validate(desiredPlan);
+            preflightReplication(desiredPlan);
+        }
         desiredPlan.getAclPlans().forEach(aclPlan -> {
             if (aclPlan.getAction() == PlanAction.ADD) {
                 LogUtil.printAclPreApply(aclPlan);
@@ -108,5 +122,48 @@ public class ApplyManager {
                 LogUtil.printPostApply();
             }
         });
+    }
+
+    private void validatePermissions() {
+        if (managerConfig.isAllowReplicationDecreaseRequested() && !managerConfig.isManageReplicationRequested()) {
+            throw new ValidationException("--allow-replication-decrease requires --manage-replication.");
+        }
+    }
+
+    /** Batch preflight precedes every topic/ACL write. It always stops at the execution boundary in this stage. */
+    private void preflightReplication(DesiredPlan plan) {
+        List<TopicPlan> topics = plan.getTopicPlans().stream().filter(t -> t.getReplicationPlan().isPresent())
+                .sorted(Comparator.comparing(TopicPlan::getName)).toList();
+        if (topics.isEmpty()) return;
+        ReplicationSafetyPolicy policy = new ReplicationSafetyPolicy();
+        var permissions = new ReplicationSafetyPolicy.Permissions(managerConfig.isManageReplicationRequested(),
+                managerConfig.isAllowReplicationDecreaseRequested(), managerConfig.isDeleteDisabled());
+        Map<String, ReplicationSafetyResult> results = new TreeMap<>();
+        Map<String, List<ReplicationSafetyResult.Finding>> permissionFindings = new TreeMap<>();
+        for (TopicPlan topic : topics) {
+            var reasons = policy.permissions(topic.getReplicationPlan().orElseThrow(), permissions);
+            permissionFindings.put(topic.getName(), reasons);
+        }
+        if (permissionFindings.values().stream().anyMatch(reasons -> !reasons.isEmpty())) {
+            topics.forEach(topic -> results.put(topic.getName(), policy.blockedBeforeMetadata(
+                    topic.getReplicationPlan().orElseThrow(), permissionFindings.get(topic.getName()))));
+            throw new ReplicationPreflightException(results);
+        }
+        long started = System.nanoTime();
+        ReplicationClusterSnapshot snapshot;
+        try {
+            snapshot = kafkaService.readReplicationPreflightSnapshot(new TreeSet<>(permissionFindings.keySet()));
+        } catch (RuntimeException ex) {
+            topics.forEach(topic -> results.put(topic.getName(), policy.blockedBeforeMetadata(topic.getReplicationPlan().orElseThrow(),
+                    List.of(ReplicationSafetyResult.Finding.global(ReplicationSafetyResult.Reason.METADATA_UNAVAILABLE,
+                            ReplicationSafetyResult.Condition.UNKNOWN)))));
+            throw new ReplicationPreflightException(results);
+        }
+        long now = System.nanoTime();
+        for (TopicPlan topic : topics) {
+            results.put(topic.getName(), policy.evaluate(topic.getName(), topic.getReplicationPlan().orElseThrow(), snapshot,
+                    permissions, ReplicationSafetyPolicy.Constraints.forTopic(topic, started, now)));
+        }
+        throw new ReplicationPreflightException(results);
     }
 }

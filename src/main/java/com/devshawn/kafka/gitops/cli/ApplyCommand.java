@@ -24,12 +24,21 @@ public class ApplyCommand implements Callable<Integer> {
             description = "Specify the plan file to use.")
     private File planFile;
 
+    @CommandLine.Option(names = "--manage-replication", description = "Run RF preflight; RF execution remains unavailable.")
+    private boolean manageReplication;
+
+    @CommandLine.Option(names = "--allow-replication-decrease", description = "Permit RF decrease preflight; does not execute RF changes.")
+    private boolean allowReplicationDecrease;
+
     @CommandLine.ParentCommand
     private MainCommand parent;
 
     @Override
     public Integer call() {
         try {
+            if (allowReplicationDecrease && !manageReplication) {
+                throw new ValidationException("--allow-replication-decrease requires --manage-replication.");
+            }
             System.out.println("Executing apply...\n");
             ParserService parserService = new ParserService(parent.getStateFile());
             StateManager stateManager = new StateManager(generateStateManagerConfig(), parserService);
@@ -57,6 +66,8 @@ public class ApplyCommand implements Callable<Integer> {
                 .setVerboseRequested(parent.isVerboseRequested())
                 .setDeleteDisabled(parent.isDeleteDisabled())
                 .setIncludeUnchangedEnabled(false)
+                .setManageReplicationRequested(manageReplication)
+                .setAllowReplicationDecreaseRequested(allowReplicationDecrease)
                 .setSkipAclsDisabled(parent.areAclsDisabled())
                 .setSkipTopicsDisabled(parent.areTopicsDisabled())
                 .setNullableConfigFile(parent.getConfigFile())

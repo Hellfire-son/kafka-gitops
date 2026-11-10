@@ -243,6 +243,14 @@ public class KafkaService {
 
     /** One read-only Admin session for the complete RF planning snapshot. */
     public ReplicationClusterSnapshot readReplicationSnapshot(Set<String> names) {
+        return readReplicationSnapshot(names, false);
+    }
+
+    public ReplicationClusterSnapshot readReplicationPreflightSnapshot(Set<String> names) {
+        return readReplicationSnapshot(names, true);
+    }
+
+    private ReplicationClusterSnapshot readReplicationSnapshot(Set<String> names, boolean preflight) {
         if (names.isEmpty()) {
             throw new IllegalArgumentException("An RF snapshot requires at least one topic.");
         }
@@ -250,7 +258,7 @@ public class KafkaService {
         try {
             int timeout = partitionTimeoutMs();
             admin = buildAdminClient();
-            return ReplicationMetadataReader.read(admin, new TreeSet<>(names), timeout);
+            return ReplicationMetadataReader.read(admin, new TreeSet<>(names), timeout, preflight);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new KafkaExecutionException("RF metadata collection interrupted.", "No RF changes were sent.");

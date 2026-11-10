@@ -27,7 +27,7 @@ class ReplicationApplyGuardSpec extends Specification {
 
         then:
         def error = thrown(ValidationException)
-        error.message.contains('unavailable in Stage 6B1')
+        error.message.contains('MANAGE_REPLICATION_REQUIRED')
         error.message.contains('No topic operations were started')
 
         where:

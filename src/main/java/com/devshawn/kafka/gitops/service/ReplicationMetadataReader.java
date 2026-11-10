@@ -2,6 +2,7 @@ package com.devshawn.kafka.gitops.service;
 
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot.*;
+import com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence;
 import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.common.KafkaFuture;
@@ -25,7 +26,13 @@ final class ReplicationMetadataReader {
 
     static ReplicationClusterSnapshot read(Admin admin, Set<String> requested, int timeoutMs)
             throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
+        return read(admin, requested, timeoutMs, false);
+    }
+
+    static ReplicationClusterSnapshot read(Admin admin, Set<String> requested, int timeoutMs, boolean preflight)
+            throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+        FeatureMetadata features = preflight ? features(admin, deadline) : null;
         DescribeClusterResult cluster = admin.describeCluster(new DescribeClusterOptions().timeoutMs(ms(deadline)));
         String clusterId = await(cluster.clusterId(), deadline);
         Map<Integer, Node> nodes = nodes(await(cluster.nodes(), deadline));
@@ -99,7 +106,7 @@ final class ReplicationMetadataReader {
                             new HashSet<>(p.isr().stream().map(Node::id).toList()))).toList();
             topics.put(name, new Topic(description.topicId().toString(), partitions, minIsr(config)));
         }
-        // Detect obvious drift during collection. This is not an atomic Kafka snapshot or an apply preflight.
+        // Detect obvious drift during collection. This is not an atomic snapshot or proof of execution readiness.
         DescribeClusterResult after = admin.describeCluster(new DescribeClusterOptions().timeoutMs(ms(deadline)));
         require(Objects.equals(clusterId, await(after.clusterId(), deadline))
                 && nodes.equals(nodes(await(after.nodes(), deadline))), "RF cluster metadata changed while collecting the snapshot. Re-plan.");
@@ -110,7 +117,59 @@ final class ReplicationMetadataReader {
         Map<TopicPartition, PartitionReassignment> finalActive = await(admin.listPartitionReassignments(
                 new ListPartitionReassignmentsOptions().timeoutMs(ms(deadline))).reassignments(), deadline);
         require(active.keySet().equals(finalActive.keySet()), "Active reassignment changed during RF metadata collection. Re-plan.");
-        return new ReplicationClusterSnapshot(clusterId, brokers, topics, active.keySet(), VERIFIED, load, VERIFIED);
+        ReplicationSafetyEvidence evidence = ReplicationSafetyEvidence.unknown();
+        if (preflight) {
+            Map<ConfigResource, KafkaFuture<Config>> finalConfigs = admin.describeConfigs(resources,
+                    new DescribeConfigsOptions().includeSynonyms(true).timeoutMs(ms(deadline))).values();
+            Map<String, Observation> stableTopics = new TreeMap<>();
+            for (String name : new TreeSet<>(requested)) {
+                OptionalInt latest = minIsr(optional(finalConfigs.get(new ConfigResource(ConfigResource.Type.TOPIC, name)), deadline));
+                Topic previous = topics.get(name);
+                stableTopics.put(name, latest.isEmpty() || previous.minInSyncReplicas().isEmpty() ? UNKNOWN
+                        : latest.equals(previous.minInSyncReplicas()) ? VERIFIED : UNAVAILABLE);
+                topics.put(name, new Topic(previous.topicId(), previous.partitions(), latest));
+            }
+            Map<Integer, Observation> stableCordoning = new TreeMap<>();
+            for (int id : nodes.keySet()) {
+                Observation latest = uncordoned(optional(finalConfigs.get(new ConfigResource(ConfigResource.Type.BROKER, Integer.toString(id))), deadline));
+                Broker previous = brokers.get(id);
+                stableCordoning.put(id, latest == UNKNOWN || previous.uncordoned() == UNKNOWN ? UNKNOWN
+                        : latest == previous.uncordoned() ? VERIFIED : UNAVAILABLE);
+                brokers.put(id, new Broker(id, previous.rack(), previous.reachable(), previous.unfenced(), previous.storage(), latest, previous.minimumUsableBytes()));
+            }
+            FeatureMetadata afterFeatures = features(admin, deadline);
+            Observation stableFeatures = features == null || afterFeatures == null
+                    || features.finalizedFeaturesEpoch().isEmpty() || afterFeatures.finalizedFeaturesEpoch().isEmpty()
+                    ? UNKNOWN : features.equals(afterFeatures) ? VERIFIED : UNAVAILABLE;
+            // Neither generic placement eligibility nor required per-replica disk reserve can be proven here.
+            // Deliberately do not synthesize VERIFIED admissions from Node presence or positive usableBytes.
+            evidence = new ReplicationSafetyEvidence(OptionalLong.of(System.nanoTime()), elrMode(afterFeatures),
+                    stableFeatures, stableTopics, stableCordoning, Map.of());
+        }
+        return new ReplicationClusterSnapshot(clusterId, brokers, topics, finalActive.keySet(), VERIFIED, load, VERIFIED, evidence);
+    }
+
+    private static FeatureMetadata features(Admin admin, long deadline) throws InterruptedException, java.util.concurrent.TimeoutException {
+        try {
+            return await(admin.describeFeatures(new DescribeFeaturesOptions().timeoutMs(ms(deadline))).featureMetadata(), deadline);
+        } catch (ExecutionException | RuntimeException ignored) {
+            return null; // Unsupported, authorization failure or unavailable feature state is UNKNOWN.
+        }
+    }
+
+    private static ReplicationSafetyEvidence.ElrMode elrMode(FeatureMetadata metadata) {
+        if (metadata != null && metadata.finalizedFeaturesEpoch().isPresent()) {
+            String name = "eligible.leader.replicas.version";
+            FinalizedVersionRange active = metadata.finalizedFeatures().get(name);
+            if (active != null && active.minVersionLevel() == 1 && active.maxVersionLevel() == 1) {
+                return ReplicationSafetyEvidence.ElrMode.ENABLED;
+            }
+            SupportedVersionRange supported = metadata.supportedFeatures().get(name);
+            if (active == null && supported != null && supported.minVersion() == 0 && supported.maxVersion() >= 1) {
+                return ReplicationSafetyEvidence.ElrMode.DISABLED;
+            }
+        }
+        return ReplicationSafetyEvidence.ElrMode.UNKNOWN;
     }
 
     private static boolean sameTopic(TopicDescription before, TopicDescription after) {

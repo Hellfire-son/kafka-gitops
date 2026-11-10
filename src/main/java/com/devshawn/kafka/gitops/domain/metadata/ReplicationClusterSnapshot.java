@@ -13,12 +13,21 @@ import java.util.Set;
 public record ReplicationClusterSnapshot(String clusterId, Map<Integer, Broker> brokers,
                                          Map<String, Topic> topics, Set<TopicPartition> reassignments,
                                          Observation reassignmentState, Map<Integer, Long> replicaCounts,
-                                         Observation loadState) {
+                                         Observation loadState, ReplicationSafetyEvidence safety) {
     public ReplicationClusterSnapshot {
         brokers = Map.copyOf(brokers);
         topics = Map.copyOf(topics);
         reassignments = Set.copyOf(reassignments);
         replicaCounts = Map.copyOf(replicaCounts);
+        java.util.Objects.requireNonNull(safety);
+    }
+
+    // Planning snapshots and existing fake providers carry no execution safety evidence.
+    public ReplicationClusterSnapshot(String clusterId, Map<Integer, Broker> brokers, Map<String, Topic> topics,
+                                      Set<TopicPartition> reassignments, Observation reassignmentState,
+                                      Map<Integer, Long> replicaCounts, Observation loadState) {
+        this(clusterId, brokers, topics, reassignments, reassignmentState, replicaCounts, loadState,
+                ReplicationSafetyEvidence.unknown());
     }
 
     public enum Observation { VERIFIED, UNAVAILABLE, UNKNOWN }

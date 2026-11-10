@@ -230,7 +230,7 @@ class ReplicationPlanningSpec extends Specification {
     }
 
     @Unroll
-    void 'new CLI option is limited to plan and cannot authorize apply: #flag'() {
+    void 'RF CLI options parse for plan and preflight while rack override remains plan-only: #flag'() {
         given:
         def cli = new CommandLine(new MainCommand())
         cli.out = new PrintWriter(new StringWriter())
@@ -242,11 +242,13 @@ class ReplicationPlanningSpec extends Specification {
         then:
         parsed.subcommand().hasMatchedOption('--manage-replication')
 
-        when:
-        cli.parseArgs('apply', *flag)
-
-        then:
-        thrown(CommandLine.UnmatchedArgumentException)
+        expect:
+        if (flag.first() == '--replication-rack-policy') {
+            try { cli.parseArgs('apply', *flag); assert false }
+            catch (CommandLine.UnmatchedArgumentException expected) { }
+        } else {
+            cli.parseArgs('apply', *flag).subcommand().hasMatchedOption(flag.first())
+        }
 
         where:
         flag << [['--manage-replication'],['--allow-replication-decrease'],['--replication-rack-policy','BROKER_ONLY']]
@@ -315,5 +317,10 @@ class PlanningKafka extends TestKafkaService {
     @Override ReplicationClusterSnapshot readReplicationSnapshot(Set<String> names) {
         snapshotReads.add(new TreeSet<>(names))
         rfSnapshot
+    }
+
+    @Override ReplicationClusterSnapshot readReplicationPreflightSnapshot(Set<String> names) {
+        snapshotReads.add(new TreeSet<>(names))
+        rfSnapshot // No execution evidence: old planning snapshots must remain BLOCKED.
     }
 }
