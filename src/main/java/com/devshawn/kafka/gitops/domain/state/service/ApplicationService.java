@@ -5,7 +5,7 @@ import com.devshawn.kafka.gitops.domain.state.AclDetails;
 import com.devshawn.kafka.gitops.domain.state.ServiceDetails;
 import com.devshawn.kafka.gitops.util.HelperUtil;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import org.inferred.freebuilder.FreeBuilder;
 
 import java.util.ArrayList;
@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = ApplicationService.Builder.class)
 @JsonDeserialize(builder = ApplicationService.Builder.class)
 public abstract class ApplicationService extends ServiceDetails {
 

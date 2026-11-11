@@ -308,7 +308,7 @@ class PlanningKafka extends TestKafkaService {
     ReplicationClusterSnapshot initial = rfSnapshot
     List<Set<String>> snapshotReads = []
 
-    @Override List<TopicListing> getTopics() { initial.topics().keySet().collect { new TopicListing(it,false) } }
+    @Override List<TopicListing> getTopics() { initial.topics().keySet().collect { new TopicListing(it, org.apache.kafka.common.Uuid.ZERO_UUID, false) } }
 
     @Override Map<String,TopicDescription> describeTopics(List<String> names) {
         names.collectEntries { [(it):description(it,initial.topics()[it],initial.brokers())] }

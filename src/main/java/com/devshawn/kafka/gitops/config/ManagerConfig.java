@@ -1,6 +1,6 @@
 package com.devshawn.kafka.gitops.config;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import com.devshawn.kafka.gitops.enums.RackAwarenessPolicy;
 import org.inferred.freebuilder.FreeBuilder;
 
@@ -8,6 +8,7 @@ import java.io.File;
 import java.util.Optional;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = ManagerConfig.Builder.class)
 @JsonDeserialize(builder = ManagerConfig.Builder.class)
 public interface ManagerConfig {
 

@@ -92,7 +92,8 @@ final class ReplicationMetadataReader {
                 }
                 // Authorization/unsupported API/other failures remain UNKNOWN. Never expose the response text.
             }
-            // Kafka 3.9 Node/DescribeClusterOptions cannot expose the 4.x fencing metadata.
+            // New Kafka accessors alone do not establish the full fencing/admission evidence.
+            // Preserve UNKNOWN and the existing fail-closed policy during the client migration.
             brokers.put(node.id(), new Broker(node.id(), Optional.ofNullable(node.rack()), reachable, UNKNOWN, storage, uncordoned, usable));
         }
 

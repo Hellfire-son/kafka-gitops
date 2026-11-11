@@ -56,7 +56,7 @@ class PartitionApplySpec extends Specification {
     void 'preflight detects drift in a later topic before any mutation'() {
         given:
         def kafka = new TestKafkaService(partitionCounts: ['test-topic': 3, 'drifted': 4])
-        kafka.topics.add(new TopicListing('drifted', false))
+        kafka.topics.add(new TopicListing('drifted', org.apache.kafka.common.Uuid.ZERO_UUID, false))
         def plan = new DesiredPlan.Builder()
                 .addTopicPlans(new TopicPlan.Builder().setName('new-topic').setAction(ADD).setTopicDetails(details()).build())
                 .addTopicPlans(update('test-topic', 3, 6, [config('retention.ms', UPDATE, '2000', '1000')]))
@@ -140,7 +140,7 @@ class PartitionApplySpec extends Specification {
             }
         }
         kafka.partitionCounts = ['test-topic': 3, 'second': 3]
-        kafka.topics.add(new TopicListing('second', false))
+        kafka.topics.add(new TopicListing('second', org.apache.kafka.common.Uuid.ZERO_UUID, false))
         def plan = new DesiredPlan.Builder().addTopicPlans(update(), update('second'))
                 .addTopicPlans(new TopicPlan.Builder().setName('new-topic').setAction(ADD).setTopicDetails(details()).build()).build()
 

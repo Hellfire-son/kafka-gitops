@@ -4,8 +4,8 @@ import com.devshawn.kafka.gitops.domain.plan.serialization.TopicPlanSerializer;
 import com.devshawn.kafka.gitops.domain.state.TopicDetails;
 import com.devshawn.kafka.gitops.enums.PlanAction;
 import com.devshawn.kafka.gitops.util.ReplicationPlanValidation;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 import org.inferred.freebuilder.FreeBuilder;
@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = TopicPlan.Builder.class)
 @JsonDeserialize(builder = TopicPlan.Builder.class)
 @JsonSerialize(using = TopicPlanSerializer.class)
 public interface TopicPlan {

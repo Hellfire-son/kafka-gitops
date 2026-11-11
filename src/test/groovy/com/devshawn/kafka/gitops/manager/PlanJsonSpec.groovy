@@ -4,8 +4,9 @@ import com.devshawn.kafka.gitops.domain.plan.DesiredPlan
 import com.devshawn.kafka.gitops.domain.plan.TopicConfigPlan
 import com.devshawn.kafka.gitops.exception.ReadPlanInputException
 import com.devshawn.kafka.gitops.exception.WritePlanOutputException
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.databind.JsonMappingException
+import tools.jackson.databind.cfg.EnumFeature
+import tools.jackson.databind.DeserializationFeature
+import tools.jackson.databind.DatabindException
 import spock.lang.Specification
 import spock.lang.TempDir
 import spock.lang.Unroll
@@ -131,7 +132,7 @@ class PlanJsonSpec extends Specification {
         mapper().writeValueAsString(config('custom.option', UPDATE, 'private-json-new', null, true))
 
         then:
-        def error = thrown(JsonMappingException)
+        def error = thrown(DatabindException)
         !error.message.contains('private-json-new')
     }
 
@@ -150,8 +151,9 @@ class PlanJsonSpec extends Specification {
     void 'strictly rejects incompatible JSON #description even with a permissive shared mapper'() {
         given:
         File file = jsonFile(json)
-        def permissive = mapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                .enable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_AS_NULL)
+        def permissive = mapper().rebuild().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .enable(EnumFeature.READ_UNKNOWN_ENUM_VALUES_AS_NULL)
+                .build()
 
         when:
         new PlanManager(options(file), null, permissive).readPlanFromFile()

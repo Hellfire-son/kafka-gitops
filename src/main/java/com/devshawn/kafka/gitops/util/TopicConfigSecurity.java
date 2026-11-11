@@ -19,8 +19,9 @@ public final class TopicConfigSecurity {
             TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG,
             TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG,
             TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, TopicConfig.COMPRESSION_TYPE_CONFIG,
-            TopicConfig.PREALLOCATE_CONFIG, TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG,
-            TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG,
+            // Removed from the Kafka 4.x Java API; retain legacy plan/config diagnostics.
+            TopicConfig.PREALLOCATE_CONFIG, "message.format.version",
+            TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "message.timestamp.difference.max.ms",
             TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG,
             TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG,
             "leader.replication.throttled.replicas", "follower.replication.throttled.replicas",

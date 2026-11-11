@@ -5,7 +5,7 @@ import com.devshawn.kafka.gitops.domain.options.GetAclOptions;
 import com.devshawn.kafka.gitops.domain.state.AclDetails;
 import com.devshawn.kafka.gitops.domain.state.ServiceDetails;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import org.inferred.freebuilder.FreeBuilder;
 
 import java.util.ArrayList;
@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = KafkaConnectService.Builder.class)
 @JsonDeserialize(builder = KafkaConnectService.Builder.class)
 public abstract class KafkaConnectService extends ServiceDetails {
 

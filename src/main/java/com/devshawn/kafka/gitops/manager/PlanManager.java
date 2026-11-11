@@ -25,14 +25,14 @@ import com.devshawn.kafka.gitops.util.PlanValidation;
 import com.devshawn.kafka.gitops.util.ReplicationPlanValidation.InvalidReplicationPlanException;
 import com.devshawn.kafka.gitops.util.TopicConfigSecurity;
 import com.devshawn.kafka.gitops.util.LogUtil;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.cfg.CoercionAction;
-import com.fasterxml.jackson.databind.cfg.CoercionInputShape;
-import com.fasterxml.jackson.databind.type.LogicalType;
+import tools.jackson.core.StreamReadFeature;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.cfg.EnumFeature;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.CoercionAction;
+import tools.jackson.databind.cfg.CoercionInputShape;
+import tools.jackson.databind.type.LogicalType;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.TopicListing;
@@ -63,16 +63,17 @@ public class PlanManager {
         this.managerConfig = managerConfig;
         this.kafkaService = kafkaService;
         // Plan files are executable input. Keep strict reading local to plans, not the shared mapper.
-        this.objectMapper = objectMapper.copy()
+        this.objectMapper = objectMapper.rebuild()
                 .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                .enable(DeserializationFeature.FAIL_ON_NUMBERS_FOR_ENUMS)
+                .enable(EnumFeature.FAIL_ON_NUMBERS_FOR_ENUMS)
                 .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
                 .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                 .disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
-                .disable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_AS_NULL)
-                .disable(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE)
-                .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
-        this.objectMapper.coercionConfigFor(LogicalType.Integer).setCoercion(CoercionInputShape.String, CoercionAction.Fail);
+                .disable(EnumFeature.READ_UNKNOWN_ENUM_VALUES_AS_NULL)
+                .disable(EnumFeature.READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE)
+                .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+                .withCoercionConfig(LogicalType.Integer, cfg -> cfg.setCoercion(CoercionInputShape.String, CoercionAction.Fail))
+                .build();
     }
 
     public void planTopics(DesiredState desiredState, DesiredPlan.Builder desiredPlan) {
@@ -321,16 +322,15 @@ public class PlanManager {
                 DesiredPlan plan = objectMapper.readValue(file, DesiredPlan.class);
                 PlanValidation.validate(plan);
                 return plan;
-            } catch (FileNotFoundException ex) {
-                throw new ReadPlanInputException("The specified plan file could not be found.");
             } catch (InvalidReplicationPlanException ex) {
                 throw new ReadPlanInputException("Invalid replication plan: " + ex.getMessage());
-            } catch (JsonMappingException ex) {
-                if (ex.getPath().stream().anyMatch(reference -> "replicationPlan".equals(reference.getFieldName()))) {
+            } catch (JacksonException ex) {
+                if (ex.getPath().stream().anyMatch(reference -> "replicationPlan".equals(reference.getPropertyName()))) {
                     throw new ReadPlanInputException("Invalid replicationPlan structure, field type, required field or operation. Only schemaVersion 1 and UPDATE are supported.");
                 }
-                throw new ReadPlanInputException();
-            } catch (IOException ex) {
+                if (ex.getCause() instanceof FileNotFoundException) {
+                    throw new ReadPlanInputException("The specified plan file could not be found.");
+                }
                 throw new ReadPlanInputException();
             } catch (IllegalArgumentException ex) {
                 throw new ReadPlanInputException("Unsupported or incomplete operations in the plan. Generate a new plan.");
@@ -352,7 +352,7 @@ public class PlanManager {
                 }
             } catch (InvalidReplicationPlanException ex) {
                 throw new WritePlanOutputException("Invalid replication plan: " + ex.getMessage());
-            } catch (JsonProcessingException ex) {
+            } catch (JacksonException ex) {
                 throw new WritePlanOutputException("Plan serialization refused: invalid structure or confidential values. Confidential values cannot be exported; apply directly from the state file.");
             } catch (IOException ex) {
                 throw new WritePlanOutputException("The execution plan file could not be written. Check file access.");

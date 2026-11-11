@@ -3,21 +3,20 @@ package com.devshawn.kafka.gitops.service;
 import com.devshawn.kafka.gitops.domain.state.DesiredStateFile;
 import com.devshawn.kafka.gitops.domain.state.settings.Settings;
 import com.devshawn.kafka.gitops.exception.ValidationException;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.exc.InvalidFormatException;
-import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
-import com.fasterxml.jackson.databind.exc.ValueInstantiationException;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import tools.jackson.core.StreamReadFeature;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.DatabindException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.exc.InvalidFormatException;
+import tools.jackson.databind.exc.UnrecognizedPropertyException;
+import tools.jackson.databind.exc.ValueInstantiationException;
+import tools.jackson.dataformat.yaml.YAMLMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.nio.file.Paths;
 
 public class ParserService {
@@ -29,10 +28,13 @@ public class ParserService {
     private final File file;
 
     public ParserService(File file) {
-        this.objectMapper = new ObjectMapper(new YAMLFactory());
-        objectMapper.enable(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY);
-        objectMapper.enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
-        objectMapper.registerModule(new Jdk8Module());
+        this.objectMapper = YAMLMapper.builder()
+                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+                .disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .enable(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY)
+                .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+                .build();
         this.file = file;
     }
 
@@ -67,11 +69,12 @@ public class ParserService {
             throw new ValidationException("Unrecognized field in state file.");
         } catch (InvalidFormatException ex) {
             throw new ValidationException("Invalid field format in state file.");
-        } catch (JsonMappingException ex) {
+        } catch (DatabindException ex) {
             throw new ValidationException("Invalid state file structure or field type.");
-        } catch (FileNotFoundException ex) {
-            throw new ValidationException("The specified state file could not be found.");
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
+            if (ex.getCause() instanceof FileNotFoundException) {
+                throw new ValidationException("The specified state file could not be found.");
+            }
             throw new ValidationException("Invalid state file. Check syntax and file access.");
         }
     }

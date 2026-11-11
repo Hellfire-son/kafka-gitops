@@ -19,7 +19,7 @@ class PlanFixturesSpec extends Specification {
         given:
         TestKafkaService kafka = new TestKafkaService()
         kafka.topics = ['delete-topic', 'test-topic', 'topic-with-configs-1', 'topic-with-configs-2']
-                .collect { new TopicListing(it, false) }
+                .collect { new TopicListing(it, org.apache.kafka.common.Uuid.ZERO_UUID, false) }
         kafka.topicEntries = [
                 'topic-with-configs-1': [entry('cleanup.policy', 'compact'), entry('segment.bytes', '100000')],
                 'topic-with-configs-2': [entry('retention.ms', '60000')]

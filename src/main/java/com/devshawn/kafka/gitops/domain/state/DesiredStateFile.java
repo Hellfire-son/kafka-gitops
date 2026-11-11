@@ -2,13 +2,14 @@ package com.devshawn.kafka.gitops.domain.state;
 
 
 import com.devshawn.kafka.gitops.domain.state.settings.Settings;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import org.inferred.freebuilder.FreeBuilder;
 
 import java.util.Map;
 import java.util.Optional;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = DesiredStateFile.Builder.class)
 @JsonDeserialize(builder = DesiredStateFile.Builder.class)
 public interface DesiredStateFile {
 

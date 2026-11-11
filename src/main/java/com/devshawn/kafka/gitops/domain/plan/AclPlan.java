@@ -2,10 +2,11 @@ package com.devshawn.kafka.gitops.domain.plan;
 
 import com.devshawn.kafka.gitops.domain.state.AclDetails;
 import com.devshawn.kafka.gitops.enums.PlanAction;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import org.inferred.freebuilder.FreeBuilder;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = AclPlan.Builder.class)
 @JsonDeserialize(builder = AclPlan.Builder.class)
 public interface AclPlan {
 

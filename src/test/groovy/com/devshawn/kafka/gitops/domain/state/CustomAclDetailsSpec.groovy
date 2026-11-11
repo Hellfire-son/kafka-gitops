@@ -109,7 +109,7 @@ class CustomAclDetailsSpec extends Specification {
         ex.getAllowedValues() == ["ALL", "READ", "WRITE", "CREATE", "DELETE", "ALTER", "DESCRIBE", "CLUSTER_ACTION", "DESCRIBE_CONFIGS", "ALTER_CONFIGS", "IDEMPOTENT_WRITE", "CREATE_TOKENS", "DESCRIBE_TOKENS"]
 
         where:
-        input << ["ANY", "UNKNOWN", "not real", "PREFIX", "prefixed", "topic"]
+        input << ["ANY", "UNKNOWN", "not real", "PREFIX", "prefixed", "topic", "TWO_PHASE_COMMIT"]
     }
 
     void 'test invalid custom acl details - permission - #input'() {

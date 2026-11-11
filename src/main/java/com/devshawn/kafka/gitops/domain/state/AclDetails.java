@@ -1,6 +1,6 @@
 package com.devshawn.kafka.gitops.domain.state;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
@@ -11,6 +11,7 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.inferred.freebuilder.FreeBuilder;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = AclDetails.Builder.class)
 @JsonDeserialize(builder = AclDetails.Builder.class)
 public interface AclDetails {
 

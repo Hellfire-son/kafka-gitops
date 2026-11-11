@@ -32,10 +32,10 @@ import com.devshawn.kafka.gitops.service.ParserService;
 import com.devshawn.kafka.gitops.service.RoleService;
 import com.devshawn.kafka.gitops.util.LogUtil;
 import com.devshawn.kafka.gitops.util.StateUtil;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import tools.jackson.core.json.JsonReadFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
@@ -376,10 +376,10 @@ public class StateManager {
     }
 
     private static ObjectMapper initializeObjectMapper() {
-        return new ObjectMapper()
-        .enable(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES)
+        return JsonMapper.builderWithJackson2Defaults()
+        .enable(JsonReadFeature.ALLOW_UNQUOTED_PROPERTY_NAMES)
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-        .registerModule(new Jdk8Module());
+        .build();
     }
 
     private static void initializeLogger(boolean verbose) {

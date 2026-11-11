@@ -1,15 +1,13 @@
 plugins {
-    id("com.gradle.enterprise") version("3.17.2")
-    id("org.gradle.toolchains.foojay-resolver-convention") version("0.8.0")
+    id('com.gradle.develocity') version '4.6.1'
+    id('org.gradle.toolchains.foojay-resolver-convention') version '1.0.0'
 }
 
-gradleEnterprise {
-    if (System.getenv("CI") != null) {
-        buildScan {
-            publishAlways()
-            termsOfServiceUrl = "https://gradle.com/terms-of-service"
-            termsOfServiceAgree = "yes"
-        }
+develocity {
+    buildScan {
+        publishing.onlyIf { providers.gradleProperty('publishBuildScan').orNull == 'true' }
+        termsOfUseUrl = 'https://gradle.com/terms-of-service'
+        termsOfUseAgree = 'yes'
     }
 }
 

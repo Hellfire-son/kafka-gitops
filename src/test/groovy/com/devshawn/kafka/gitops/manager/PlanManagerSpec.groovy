@@ -108,7 +108,7 @@ class PlanManagerSpec extends Specification {
 
     void 'preserves include and exclude prefixes and no-delete=#noDelete'() {
         given:
-        kafka.topics = ['test-topic', 'managed-delete', 'managed-keep', 'external-topic'].collect { new TopicListing(it, false) }
+        kafka.topics = ['test-topic', 'managed-delete', 'managed-keep', 'external-topic'].collect { new TopicListing(it, org.apache.kafka.common.Uuid.ZERO_UUID, false) }
         def state = new DesiredState.Builder().putTopics('test-topic', details())
                 .addPrefixedTopicsToAccept('managed-').addPrefixedTopicsToIgnore('managed-keep').build()
         def builder = new DesiredPlan.Builder()

@@ -2,12 +2,11 @@ package com.devshawn.kafka.gitops.domain.plan.serialization;
 
 import com.devshawn.kafka.gitops.domain.plan.TopicConfigPlan;
 import com.devshawn.kafka.gitops.util.TopicConfigSecurity;
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import tools.jackson.core.JsonGenerator;
+import tools.jackson.databind.DatabindException;
+import tools.jackson.databind.SerializationContext;
+import tools.jackson.databind.ser.std.StdSerializer;
 
-import java.io.IOException;
 
 public final class TopicConfigPlanSerializer extends StdSerializer<TopicConfigPlan> {
     public TopicConfigPlanSerializer() {
@@ -15,20 +14,20 @@ public final class TopicConfigPlanSerializer extends StdSerializer<TopicConfigPl
     }
 
     @Override
-    public void serialize(TopicConfigPlan config, JsonGenerator generator, SerializerProvider provider) throws IOException {
+    public void serialize(TopicConfigPlan config, JsonGenerator generator, SerializationContext provider) {
         boolean sensitive = TopicConfigSecurity.isSensitive(config);
         if (sensitive && (config.getValue().isPresent() || config.getPreviousValue().isPresent())) {
-            throw JsonMappingException.from(generator, "Confidential configuration values cannot be exported. Apply directly from the state file.");
+            throw DatabindException.from(generator, "Confidential configuration values cannot be exported. Apply directly from the state file.");
         }
         generator.writeStartObject();
-        generator.writeStringField("key", config.getKey());
-        generator.writeObjectField("value", config.getValue().orElse(null));
+        generator.writeStringProperty("key", config.getKey());
+        generator.writePOJOProperty("value", config.getValue().orElse(null));
         if (config.getPreviousValue().isPresent()) {
-            generator.writeStringField("previousValue", config.getPreviousValue().get());
+            generator.writeStringProperty("previousValue", config.getPreviousValue().get());
         }
-        generator.writeObjectField("action", config.getAction());
+        generator.writePOJOProperty("action", config.getAction());
         if (sensitive) {
-            generator.writeBooleanField("sensitive", true);
+            generator.writeBooleanProperty("sensitive", true);
         }
         generator.writeEndObject();
     }

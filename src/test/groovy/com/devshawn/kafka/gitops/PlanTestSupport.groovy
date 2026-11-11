@@ -8,8 +8,8 @@ import com.devshawn.kafka.gitops.domain.plan.TopicPlan
 import com.devshawn.kafka.gitops.domain.state.TopicDetails
 import com.devshawn.kafka.gitops.enums.PlanAction
 import com.devshawn.kafka.gitops.service.KafkaService
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.datatype.jdk8.Jdk8Module
+import tools.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.clients.admin.Config
 import org.apache.kafka.clients.admin.ConfigEntry
@@ -22,7 +22,7 @@ import org.apache.kafka.common.config.ConfigResource
 
 class PlanTestSupport {
     static ObjectMapper mapper() {
-        new ObjectMapper().registerModule(new Jdk8Module())
+        JsonMapper.builderWithJackson2Defaults().build()
     }
 
     static ManagerConfig options(File planFile = null, boolean deleteDisabled = false, boolean includeUnchanged = false) {
@@ -54,7 +54,7 @@ class PlanTestSupport {
 
 // Every Kafka operation is handled in memory. No AdminClient is ever constructed.
 class TestKafkaService extends KafkaService {
-    List<TopicListing> topics = [new TopicListing('test-topic', false)]
+    List<TopicListing> topics = [new TopicListing('test-topic', org.apache.kafka.common.Uuid.ZERO_UUID, false)]
     List<ConfigEntry> entries = []
     Map<String, List<ConfigEntry>> topicEntries = [:]
     List<Map> operations = []

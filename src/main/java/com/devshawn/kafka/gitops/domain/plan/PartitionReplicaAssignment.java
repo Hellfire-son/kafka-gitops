@@ -1,11 +1,12 @@
 package com.devshawn.kafka.gitops.domain.plan;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import org.inferred.freebuilder.FreeBuilder;
 
 import java.util.List;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = PartitionReplicaAssignment.Builder.class)
 @JsonDeserialize(builder = PartitionReplicaAssignment.Builder.class)
 public interface PartitionReplicaAssignment {
     int getPartition();

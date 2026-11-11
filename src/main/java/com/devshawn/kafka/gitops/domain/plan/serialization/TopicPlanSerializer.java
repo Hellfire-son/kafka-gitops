@@ -3,12 +3,11 @@ package com.devshawn.kafka.gitops.domain.plan.serialization;
 import com.devshawn.kafka.gitops.domain.plan.TopicPlan;
 import com.devshawn.kafka.gitops.util.TopicConfigSecurity;
 import com.devshawn.kafka.gitops.util.ReplicationPlanValidation;
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import tools.jackson.core.JsonGenerator;
+import tools.jackson.databind.DatabindException;
+import tools.jackson.databind.SerializationContext;
+import tools.jackson.databind.ser.std.StdSerializer;
 
-import java.io.IOException;
 
 public final class TopicPlanSerializer extends StdSerializer<TopicPlan> {
     public TopicPlanSerializer() {
@@ -16,26 +15,26 @@ public final class TopicPlanSerializer extends StdSerializer<TopicPlan> {
     }
 
     @Override
-    public void serialize(TopicPlan topic, JsonGenerator generator, SerializerProvider provider) throws IOException {
+    public void serialize(TopicPlan topic, JsonGenerator generator, SerializationContext provider) {
         // Desired values also occur in topicDetails.configs, including for newly created topics.
         if (TopicConfigSecurity.hasSensitiveValues(topic)) {
-            throw JsonMappingException.from(generator, "Confidential configuration values cannot be exported. Apply directly from the state file.");
+            throw DatabindException.from(generator, "Confidential configuration values cannot be exported. Apply directly from the state file.");
         }
         try {
             ReplicationPlanValidation.validate(topic);
         } catch (ReplicationPlanValidation.InvalidReplicationPlanException ex) {
-            throw JsonMappingException.from(generator, ex.getMessage());
+            throw DatabindException.from(generator, ex.getMessage());
         }
         generator.writeStartObject();
-        generator.writeStringField("name", topic.getName());
-        generator.writeObjectField("action", topic.getAction());
-        generator.writeObjectField("topicDetails", topic.getTopicDetails().orElse(null));
-        generator.writeObjectField("topicConfigPlans", topic.getTopicConfigPlans());
+        generator.writeStringProperty("name", topic.getName());
+        generator.writePOJOProperty("action", topic.getAction());
+        generator.writePOJOProperty("topicDetails", topic.getTopicDetails().orElse(null));
+        generator.writePOJOProperty("topicConfigPlans", topic.getTopicConfigPlans());
         if (topic.getPartitionPlan().isPresent()) {
-            generator.writeObjectField("partitionPlan", topic.getPartitionPlan().get());
+            generator.writePOJOProperty("partitionPlan", topic.getPartitionPlan().get());
         }
         if (topic.getReplicationPlan().isPresent()) {
-            generator.writeObjectField("replicationPlan", topic.getReplicationPlan().get());
+            generator.writePOJOProperty("replicationPlan", topic.getReplicationPlan().get());
         }
         generator.writeEndObject();
     }

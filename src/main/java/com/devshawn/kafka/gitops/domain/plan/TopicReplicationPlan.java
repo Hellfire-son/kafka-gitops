@@ -3,13 +3,14 @@ package com.devshawn.kafka.gitops.domain.plan;
 import com.devshawn.kafka.gitops.domain.plan.serialization.TopicReplicationPlanSerializer;
 import com.devshawn.kafka.gitops.enums.PlanAction;
 import com.devshawn.kafka.gitops.enums.RackAwarenessPolicy;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonSerialize;
 import org.inferred.freebuilder.FreeBuilder;
 
 import java.util.List;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = TopicReplicationPlan.Builder.class)
 @JsonDeserialize(builder = TopicReplicationPlan.Builder.class)
 @JsonSerialize(using = TopicReplicationPlanSerializer.class)
 public interface TopicReplicationPlan {

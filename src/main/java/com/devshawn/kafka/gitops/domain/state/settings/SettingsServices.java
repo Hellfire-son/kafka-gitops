@@ -1,11 +1,12 @@
 package com.devshawn.kafka.gitops.domain.state.settings;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import org.inferred.freebuilder.FreeBuilder;
 
 import java.util.Optional;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = SettingsServices.Builder.class)
 @JsonDeserialize(builder = SettingsServices.Builder.class)
 public interface SettingsServices {
 

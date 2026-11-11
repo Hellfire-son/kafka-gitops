@@ -353,7 +353,7 @@ class ReadOnlyAdmin implements InvocationHandler {
                         clusterId,KafkaFuture.completedFuture([] as Set))
             case 'listTopics':
                 internalRequested = opts.shouldListInternal()
-                return new ListTopicsResult(KafkaFuture.completedFuture(state.topics().collectEntries { k,v -> [(k):new TopicListing(k,false)] }))
+                return new ListTopicsResult(KafkaFuture.completedFuture(state.topics().collectEntries { k,v -> [(k):new TopicListing(k, org.apache.kafka.common.Uuid.ZERO_UUID, false)] }))
             case 'describeTopics':
                 def descriptions = args[0].collectEntries { n -> [(n):KafkaFuture.completedFuture(description(n,state.topics()[n],state.brokers()))] }
                 if (reorder && calls.count(name) > 1) {

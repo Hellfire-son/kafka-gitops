@@ -1,9 +1,10 @@
 package com.devshawn.kafka.gitops.domain.plan;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import org.inferred.freebuilder.FreeBuilder;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = PlanOverview.Builder.class)
 @JsonDeserialize(builder = PlanOverview.Builder.class)
 public interface PlanOverview {
 

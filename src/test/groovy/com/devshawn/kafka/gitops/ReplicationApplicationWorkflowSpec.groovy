@@ -530,7 +530,7 @@ class PipelineKafka extends TestKafkaService {
     boolean failLegacy
 
     PipelineKafka() {
-        topics = [new TopicListing('other-topic',false)]
+        topics = [new TopicListing('other-topic', org.apache.kafka.common.Uuid.ZERO_UUID, false)]
         partitionCounts['other-topic'] = 1
     }
     @Override com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot readReplicationPreflightSnapshot(Set<String> names) {

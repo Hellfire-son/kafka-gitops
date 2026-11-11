@@ -2,12 +2,13 @@ package com.devshawn.kafka.gitops.domain.plan;
 
 import com.devshawn.kafka.gitops.enums.PlanAction;
 import com.devshawn.kafka.gitops.util.PlanValidation;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import org.inferred.freebuilder.FreeBuilder;
 
 import java.util.List;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = DesiredPlan.Builder.class)
 @JsonDeserialize(builder = DesiredPlan.Builder.class)
 public interface DesiredPlan {
 

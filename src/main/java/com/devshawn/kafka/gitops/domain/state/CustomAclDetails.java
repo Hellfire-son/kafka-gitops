@@ -1,7 +1,7 @@
 package com.devshawn.kafka.gitops.domain.state;
 
 import com.devshawn.kafka.gitops.exception.InvalidAclDefinitionException;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.resource.PatternType;
@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 @FreeBuilder
+@com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = CustomAclDetails.Builder.class)
 @JsonDeserialize(builder = CustomAclDetails.Builder.class)
 public interface CustomAclDetails {
 
@@ -41,6 +42,8 @@ public interface CustomAclDetails {
         List<String> allowedValues = Arrays.stream(enumData.getEnumConstants())
                 .map(Enum::name)
                 .filter(it -> !it.equals("ANY") && !it.equals("UNKNOWN"))
+                // Kafka 4.4 adds this operation; dependency migration must not expand our ACL policy.
+                .filter(it -> enumData != AclOperation.class || !it.equals("TWO_PHASE_COMMIT"))
                 .toList();
         if (!allowedValues.contains(value)) {
             throw new InvalidAclDefinitionException(field, value, allowedValues);
