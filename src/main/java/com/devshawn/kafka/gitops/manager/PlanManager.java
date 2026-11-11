@@ -345,7 +345,7 @@ public class PlanManager {
                 // Serialize before opening the destination: confidential values must not truncate an existing file.
                 String output = objectMapper.writeValueAsString(outputPlan);
                 if (!planFile.createNewFile()) {
-                    LOG.info("Overwriting existing plan file at {}", planFile);
+                    LOG.info("Overwriting existing plan file.");
                 }
                 try(FileWriter writer = new FileWriter(planFile)) {
                     writer.write(output);
@@ -355,7 +355,7 @@ public class PlanManager {
             } catch (JsonProcessingException ex) {
                 throw new WritePlanOutputException("Plan serialization refused: invalid structure or confidential values. Confidential values cannot be exported; apply directly from the state file.");
             } catch (IOException ex) {
-                throw new WritePlanOutputException(ex.getMessage());
+                throw new WritePlanOutputException("The execution plan file could not be written. Check file access.");
             }
         });
     }

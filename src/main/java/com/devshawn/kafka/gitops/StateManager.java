@@ -70,7 +70,8 @@ public class StateManager {
                  ReplicationApplication replicationApplication) {
         initializeLogger(managerConfig.isVerboseRequested());
         ObjectMapper objectMapper = initializeObjectMapper();
-        KafkaService kafkaService = suppliedKafkaService != null ? suppliedKafkaService : new KafkaService(KafkaGitopsConfigLoader.load());
+        KafkaService kafkaService = suppliedKafkaService != null ? suppliedKafkaService
+                : new KafkaService(KafkaGitopsConfigLoader.load(managerConfig.getConfigFile().orElse(null)));
 
         this.managerConfig = managerConfig;
         this.parserService = parserService;

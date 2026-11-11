@@ -19,7 +19,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.List;
 
 public class ParserService {
 
@@ -63,35 +62,24 @@ public class ParserService {
         try {
             return objectMapper.readValue(stateFile, DesiredStateFile.class);
         } catch (ValueInstantiationException ex) {
-            List<String> fields = getYamlFields(ex);
-            String joinedFields = String.join(" -> ", fields);
-            throw new ValidationException(String.format("%s in state file definition: %s", ex.getCause().getMessage(), joinedFields));
+            throw new ValidationException("Missing or invalid required fields in state file.");
         } catch (UnrecognizedPropertyException ex) {
-            List<String> fields = getYamlFields(ex);
-            String joinedFields = String.join(" -> ", fields.subList(0, fields.size() - 1));
-            throw new ValidationException(String.format("Unrecognized field: [%s] in state file definition: %s", ex.getPropertyName(), joinedFields));
+            throw new ValidationException("Unrecognized field in state file.");
         } catch (InvalidFormatException ex) {
-            List<String> fields = getYamlFields(ex);
-            String value = ex.getValue().toString();
-            String propertyName = fields.get(fields.size() - 1);
-            String joinedFields = String.join(" -> ", fields.subList(0, fields.size() - 1));
-            throw new ValidationException(String.format("Value '%s' is not a valid format for: [%s] in state file definition: %s", value, propertyName, joinedFields));
+            throw new ValidationException("Invalid field format in state file.");
         } catch (JsonMappingException ex) {
-            List<String> fields = getYamlFields(ex);
-            String message = ex.getCause() != null ? ex.getCause().getMessage().split("\n")[0] : ex.getMessage().split("\n")[0];
-            String joinedFields = String.join(" -> ", fields);
-            throw new ValidationException(String.format("%s in state file definition: %s", message, joinedFields));
+            throw new ValidationException("Invalid state file structure or field type.");
         } catch (FileNotFoundException ex) {
             throw new ValidationException("The specified state file could not be found.");
         } catch (IOException ex) {
-            throw new ValidationException(String.format("Invalid state file. Unknown error: %s", ex.getMessage()));
+            throw new ValidationException("Invalid state file. Check syntax and file access.");
         }
     }
 
     private DesiredStateFile loadExternalFile(String fileName, String type) {
         File externalFile = getAdditionalFile(fileName);
         if (!externalFile.exists()) {
-            throw new ValidationException(String.format("%s file '%s' could not be found.", type, fileName));
+            throw new ValidationException(String.format("%s file could not be found.", type));
         }
         return parseStateFile(externalFile);
     }
@@ -100,9 +88,4 @@ public class ParserService {
         return new File(Paths.get(file.getAbsoluteFile().getParent(), fileName).toString());
     }
 
-    private List<String> getYamlFields(JsonMappingException ex) {
-        return ex.getPath().stream()
-                .map(JsonMappingException.Reference::getFieldName)
-                .toList();
-    }
 }

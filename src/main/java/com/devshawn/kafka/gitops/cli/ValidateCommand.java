@@ -4,6 +4,7 @@ import com.devshawn.kafka.gitops.MainCommand;
 import com.devshawn.kafka.gitops.StateManager;
 import com.devshawn.kafka.gitops.config.ManagerConfig;
 import com.devshawn.kafka.gitops.exception.ValidationException;
+import com.devshawn.kafka.gitops.exception.MissingConfigurationException;
 import com.devshawn.kafka.gitops.service.ParserService;
 import com.devshawn.kafka.gitops.util.LogUtil;
 import picocli.CommandLine;
@@ -26,7 +27,7 @@ public class ValidateCommand implements Callable<Integer> {
             stateManager.getAndValidateStateFile();
             LogUtil.printValidationResult("Successfully validated the desired state file.", true);
             return 0;
-        } catch (ValidationException ex) {
+        } catch (ValidationException | MissingConfigurationException ex) {
             LogUtil.printValidationResult(ex.getMessage(), false);
         }
         return 2;

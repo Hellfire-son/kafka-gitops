@@ -54,8 +54,9 @@ public class KafkaGitopsConfigLoader {
             Properties properties = new Properties();
             properties.load(inputStream);
             properties.forEach( (k, v) -> builder.putConfig(k.toString(), v));
-        } catch (IOException ioExc) {
-            LOG.error("Failed to load config from " + configFile, ioExc);
+        } catch (IOException | IllegalArgumentException ex) {
+            // Never continue with defaults after an explicitly requested file failed to load.
+            throw new MissingConfigurationException("readable Kafka command-config file with valid properties syntax.");
         }
     }
 
