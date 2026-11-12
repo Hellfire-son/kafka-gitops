@@ -13,7 +13,7 @@ import picocli.CommandLine.Command;
 import java.util.concurrent.Callable;
 
 
-@Command(name = "validate", description = "Validates the desired state file.")
+@Command(name = "validate", mixinStandardHelpOptions = true, description = "Validates the desired state file.")
 public class ValidateCommand implements Callable<Integer> {
 
     @CommandLine.ParentCommand

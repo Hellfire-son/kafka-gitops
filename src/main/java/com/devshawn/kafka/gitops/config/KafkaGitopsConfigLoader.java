@@ -90,7 +90,8 @@ public class KafkaGitopsConfigLoader {
         Map<String, Object> diagnosticConfig = new LinkedHashMap<>();
         for (String key : SAFE_DIAGNOSTIC_CONFIG_KEYS) {
             if (config.containsKey(key)) {
-                diagnosticConfig.put(key, config.get(key));
+                diagnosticConfig.put(key, key.equals(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
+                        ? com.devshawn.kafka.gitops.util.KafkaDiagnostics.bootstrap(config.get(key)) : config.get(key));
             }
         }
         return diagnosticConfig;
@@ -127,6 +128,6 @@ public class KafkaGitopsConfigLoader {
     }
 
     private static String escape(String value) {
-        return value.replace("\"", "\\\"");
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

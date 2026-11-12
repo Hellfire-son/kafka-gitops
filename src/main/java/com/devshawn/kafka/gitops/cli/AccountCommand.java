@@ -14,7 +14,7 @@ import picocli.CommandLine;
 
 import java.util.concurrent.Callable;
 
-@CommandLine.Command(name = "account", description = "Create Confluent Cloud service accounts.")
+@CommandLine.Command(name = "account", mixinStandardHelpOptions = true, description = "Create Confluent Cloud service accounts.")
 public class AccountCommand implements Callable<Integer> {
 
     @CommandLine.ParentCommand

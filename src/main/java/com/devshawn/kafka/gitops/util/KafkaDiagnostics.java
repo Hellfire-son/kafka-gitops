@@ -15,6 +15,25 @@ import java.util.Set;
 public final class KafkaDiagnostics {
     private KafkaDiagnostics() { }
 
+    /** Only Kafka host:port endpoints; malformed values, URL user-info and control text are never echoed. */
+    public static String bootstrap(Object configured) {
+        if (configured == null) return "UNKNOWN (not configured)";
+        String input = configured instanceof java.util.Collection<?> entries
+                ? String.join(",", entries.stream().map(String::valueOf).toList()) : configured.toString();
+        if (input.isBlank()) return "UNKNOWN (not configured)";
+        if (input.length() > 4096) return "[redacted invalid endpoints]";
+        java.util.List<String> safe = new java.util.ArrayList<>();
+        String[] endpoints = input.split(",", -1);
+        for (int i = 0; i < Math.min(endpoints.length, 5); i++) {
+            String endpoint = endpoints[i].trim();
+            var match = java.util.regex.Pattern.compile("(?:[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?|\\[[0-9A-Fa-f:]+\\]):([0-9]{1,5})").matcher(endpoint);
+            if (match.matches() && Integer.parseInt(match.group(1)) >= 1 && Integer.parseInt(match.group(1)) <= 65535) safe.add(endpoint);
+            else safe.add("[redacted invalid endpoint]");
+        }
+        if (endpoints.length > 5) safe.add("[additional endpoints omitted]");
+        return String.join(", ", safe);
+    }
+
     public static KafkaExecutionException failure(String operation, Throwable error) {
         Code code = Thread.currentThread().isInterrupted() ? Code.INTERRUPTED : Code.KAFKA_ERROR;
         Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());

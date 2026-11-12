@@ -113,10 +113,11 @@ final class AdminReplicationApplication implements ReplicationApplication {
             throw failure;
         } finally {
             if (admin != null) {
+                boolean interrupted = Thread.currentThread().isInterrupted();
                 try { admin.close(Duration.ZERO); }
                 catch (RuntimeException ignored) {
                     if (failure == null && result != null) throw new ReplicationExecutionException(result, ReplicationExecutionException.Phase.SESSION_CLOSE);
-                }
+                } finally { if (interrupted) Thread.currentThread().interrupt(); }
             }
         }
     }

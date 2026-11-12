@@ -19,6 +19,8 @@ public final class PlanValidation {
             ReplicationPlanValidation.validate(topic);
             topic.getTopicDetails().ifPresent(details -> require(details.getPartitions() > 0,
                     "The partition count must be a positive integer."));
+            topic.getTopicDetails().flatMap(details -> details.getReplication()).ifPresent(rf ->
+                    require(rf >= 1 && rf <= Short.MAX_VALUE, "Replication must be in 1..32767."));
             topic.getPartitionPlan().ifPresent(partitions -> {
                 require(topic.getAction() == PlanAction.UPDATE, "Partition changes require a topic UPDATE.");
                 require(partitions.getAction() == PlanAction.UPDATE, "Only partition UPDATE is supported.");

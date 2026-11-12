@@ -2,6 +2,11 @@
 
 Installing `kafka-gitops` requires either **Java** or **Docker**.
 
+The JAR built by this branch requires **Java 21 or newer**. On Windows, run
+`java -jar build/libs/kafka-gitops-all.jar --help` after building it. The public
+Homebrew/Docker packages below are separate distributions; their contents were
+not validated as part of this branch's local technical acceptance.
+
 ## Homebrew
 
 Install `kafka-gitops` with homebrew:
@@ -19,7 +24,7 @@ Install `kafka-gitops` by downloading the zip file from our [releases][releases]
 Ensure the command is working by running:
 
 ```bash
-kafka-gitops
+kafka-gitops --help
 ```
 
 You should see output similar to the following:

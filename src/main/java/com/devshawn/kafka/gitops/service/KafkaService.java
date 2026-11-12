@@ -47,6 +47,10 @@ public class KafkaService {
         this.config = config;
     }
 
+    public String connectionTarget() {
+        return com.devshawn.kafka.gitops.util.KafkaDiagnostics.bootstrap(config.getConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG));
+    }
+
     public List<AclBinding> getAcls() {
         ResourcePatternFilter resource = new ResourcePatternFilter(ResourceType.ANY, null, PatternType.ANY);
         AccessControlEntryFilter access = new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY);
@@ -225,8 +229,8 @@ public class KafkaService {
         return (int) Math.max(1, TimeUnit.NANOSECONDS.toMillis(remainingNanos(deadline)));
     }
 
-    private static KafkaExecutionException partitionFailure(String operation, Throwable error) {
-        return com.devshawn.kafka.gitops.util.KafkaDiagnostics.failure(operation, error);
+    private KafkaExecutionException partitionFailure(String operation, Throwable error) {
+        return operationFailure(operation, error);
     }
 
     /** One read-only Admin session for the complete RF planning snapshot. */
@@ -254,19 +258,20 @@ public class KafkaService {
             return ReplicationMetadataReader.read(admin, new TreeSet<>(names), timeout, preflight);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            throw com.devshawn.kafka.gitops.util.KafkaDiagnostics.failure("Reading RF metadata", ex);
+            throw operationFailure("Reading RF metadata", ex);
         } catch (KafkaExecutionException ex) {
             // Reader diagnostics are fixed strings; buildAdminClient diagnostics may contain raw configuration.
-            throw com.devshawn.kafka.gitops.util.KafkaDiagnostics.failure("Reading RF metadata", ex);
+            throw operationFailure("Reading RF metadata", ex);
         } catch (ExecutionException | TimeoutException | RuntimeException ex) {
-            throw com.devshawn.kafka.gitops.util.KafkaDiagnostics.failure("Reading RF metadata", ex);
+            throw operationFailure("Reading RF metadata", ex);
         } finally {
             if (admin != null) {
+                boolean interrupted = Thread.currentThread().isInterrupted();
                 try {
                     admin.close(Duration.ZERO);
                 } catch (RuntimeException ignored) {
                     // Do not replace safe diagnostics with a close exception containing external response text.
-                }
+                } finally { if (interrupted) Thread.currentThread().interrupt(); }
             }
         }
     }
@@ -290,7 +295,9 @@ public class KafkaService {
         }
     }
 
-    private static KafkaExecutionException operationFailure(String message, Exception error) {
-        return com.devshawn.kafka.gitops.util.KafkaDiagnostics.failure(message, error);
+    private KafkaExecutionException operationFailure(String message, Throwable error) {
+        var failure = com.devshawn.kafka.gitops.util.KafkaDiagnostics.failure(message, error);
+        return new KafkaExecutionException(failure.getMessage(), failure.getExceptionMessage()
+                + " Connection target: " + connectionTarget() + ".", failure.getCode());
     }
 }

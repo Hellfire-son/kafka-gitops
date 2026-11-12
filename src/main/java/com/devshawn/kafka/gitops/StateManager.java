@@ -126,7 +126,7 @@ public class StateManager {
         DesiredState desiredState = getDesiredState();
         DesiredPlan.Builder desiredPlan = new DesiredPlan.Builder();
         if (diagnostics) {
-            System.out.println("[CONNECT] Connecting to the explicitly configured Kafka bootstrap servers ...");
+            System.out.println("[CONNECT] Connecting to Kafka target: " + kafkaService.connectionTarget() + " ...");
             System.out.println("[METADATA] Reading Kafka resource and broker metadata ...");
         }
         kafkaService.beginPlanning();
@@ -157,6 +157,7 @@ public class StateManager {
         planManager.validatePlanHasChanges(desiredPlan, managerConfig.isDeleteDisabled(),
                 managerConfig.isSkipAclsDisabled(), managerConfig.isSkipTopicsDisabled());
 
+        System.out.println("[CONNECT] Preparing apply against Kafka target: " + kafkaService.connectionTarget());
         applyManager.applyPlan(desiredPlan);
 
         return desiredPlan;
@@ -388,6 +389,9 @@ public class StateManager {
             if (details.getPartitions() < 1) {
                 throw new ValidationException("The partition count must be a positive integer (topic: " + name + ").");
             }
+            details.getReplication().ifPresent(rf -> {
+                if (rf < 1 || rf > Short.MAX_VALUE) throw new ValidationException("Replication must be in 1..32767 (topic: " + name + ").");
+            });
         });
         Optional<Integer> defaultReplication = StateUtil.fetchReplication(desiredStateFile);
         if (defaultReplication.isEmpty()) {
@@ -397,8 +401,8 @@ public class StateManager {
                 }
             });
         } else {
-            if (defaultReplication.get() < 1) {
-                throw new ValidationException("The default replication factor must be a positive integer.");
+            if (defaultReplication.get() < 1 || defaultReplication.get() > Short.MAX_VALUE) {
+                throw new ValidationException("The default replication factor must be a positive integer in 1..32767.");
             }
         }
     }

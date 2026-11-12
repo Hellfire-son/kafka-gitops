@@ -8,7 +8,11 @@ import tools.jackson.databind.ObjectMapper;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 
 public class ConfluentCloudService {
 
@@ -56,8 +60,45 @@ public class ConfluentCloudService {
     }
 
     public static String execCmd(String[] cmd) throws java.io.IOException {
-        java.util.Scanner s = new java.util.Scanner(Runtime.getRuntime().exec(cmd).getInputStream()).useDelimiter("\\A");
-        return s.hasNext() ? s.next() : "";
+        return execCmd(cmd, Duration.ofSeconds(30));
+    }
+
+    // Package-local bounded seam for isolated subprocess tests; never configurable through JSON.
+    static String execCmd(String[] cmd, Duration timeout) throws IOException {
+        if (Thread.currentThread().isInterrupted()) throw new IOException("External command interrupted.");
+        if (timeout == null || timeout.isNegative() || timeout.isZero() || timeout.compareTo(Duration.ofMinutes(1)) > 0)
+            throw new IOException("Invalid external command timeout.");
+        long deadline = System.nanoTime() + timeout.toNanos();
+        Process process;
+        try { process = new ProcessBuilder(cmd).redirectError(ProcessBuilder.Redirect.DISCARD).start(); }
+        catch (IOException | RuntimeException ex) { throw new IOException("External command could not be started."); }
+        FutureTask<byte[]> output = new FutureTask<>(() -> {
+            byte[] bytes = process.getInputStream().readNBytes(1_048_577);
+            if (bytes.length > 1_048_576) throw new IOException("External command output exceeded its limit.");
+            return bytes;
+        });
+        Thread.ofVirtual().start(output);
+        try {
+            byte[] bytes = output.get(Math.max(1, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0 || !process.waitFor(remaining, TimeUnit.NANOSECONDS)) throw new IOException("External command timed out.");
+            if (process.exitValue() != 0) throw new IOException("External command exited unsuccessfully.");
+            return new String(bytes, StandardCharsets.UTF_8);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IOException("External command interrupted.");
+        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException ex) {
+            throw new IOException("External command failed, timed out or exceeded its output limit.");
+        } finally {
+            boolean interrupted = Thread.currentThread().isInterrupted();
+            try {
+                if (process.isAlive()) process.destroyForcibly();
+                output.cancel(true);
+                try { process.getInputStream().close(); } catch (IOException ignored) { }
+                try { process.getErrorStream().close(); } catch (IOException ignored) { }
+                try { process.getOutputStream().close(); } catch (IOException ignored) { }
+            } finally { if (interrupted) Thread.currentThread().interrupt(); }
+        }
     }
 
     static {

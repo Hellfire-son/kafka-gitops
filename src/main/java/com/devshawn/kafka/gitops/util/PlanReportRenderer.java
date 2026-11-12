@@ -38,6 +38,11 @@ public final class PlanReportRenderer {
             });
             if (topic != null && topic.getAction() == PlanAction.ADD) preview.desired().getConfigs().forEach((key, value) ->
                     System.out.println("  Config " + key + ": ABSENT -> " + (TopicConfigSecurity.isSensitive(key) ? "[redacted]" : value)));
+            if (topic == null) new TreeMap<>(preview.desired().getConfigs()).forEach((key, value) -> {
+                boolean secret = TopicConfigSecurity.isSensitive(key);
+                System.out.println("  Config " + key + ": " + (secret ? "[redacted]" : preview.currentConfigValues().getOrDefault(key, missing))
+                        + " -> " + (secret ? "[redacted]" : value) + " [PREVIEW_ONLY; operation not calculated]");
+            });
             preview.brokers().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(e -> {
                 var broker = e.getValue();
                 System.out.println("  Broker " + e.getKey() + ": " + (broker.isPreviewCandidate() && broker.fencingEstablished() ? "ELIGIBLE_FOR_PREVIEW" : "EXCLUDED")

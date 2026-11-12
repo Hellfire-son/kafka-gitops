@@ -62,7 +62,9 @@ public class ParserService {
         LOG.info("Parsing desired state file...");
 
         try {
-            return objectMapper.readValue(stateFile, DesiredStateFile.class);
+            DesiredStateFile parsed = objectMapper.readValue(stateFile, DesiredStateFile.class);
+            if (parsed == null) throw new ValidationException("The state file must contain a YAML object.");
+            return parsed;
         } catch (ValueInstantiationException ex) {
             throw new ValidationException("Missing or invalid required fields in state file.");
         } catch (UnrecognizedPropertyException ex) {
