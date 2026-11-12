@@ -3,6 +3,7 @@ package com.devshawn.kafka.gitops.service;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot.*;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence;
+import com.devshawn.kafka.gitops.domain.metadata.CapabilityAssessment;
 import com.devshawn.kafka.gitops.domain.plan.*;
 import com.devshawn.kafka.gitops.enums.PlanAction;
 import com.devshawn.kafka.gitops.enums.RackAwarenessPolicy;
@@ -42,10 +43,10 @@ public final class ReplicationSafetyPolicy {
     public List<Finding> permissions(TopicReplicationPlan plan, Permissions permissions) {
         List<Finding> findings = new ArrayList<>();
         if (permissions.allowDecrease() && !permissions.manageReplication()) add(findings, INVALID_PERMISSION_COMBINATION, Condition.INVALID);
-        if (!permissions.manageReplication()) add(findings, MANAGE_REPLICATION_REQUIRED, Condition.INVALID);
+        if (!permissions.manageReplication()) value(findings, MANAGE_REPLICATION_REQUIRED, Condition.INVALID, "false", "RF management enabled at apply");
         if (plan.requiresDecreaseApproval()) {
-            if (!permissions.allowDecrease()) add(findings, DECREASE_PERMISSION_REQUIRED, Condition.INVALID);
-            if (permissions.noDelete()) add(findings, NO_DELETE, Condition.INVALID);
+            if (!permissions.allowDecrease()) value(findings, DECREASE_PERMISSION_REQUIRED, Condition.INVALID, "false", "apply --allow-replication-decrease");
+            if (permissions.noDelete()) value(findings, NO_DELETE, Condition.INVALID, "--no-delete=true", "no RF decrease while --no-delete is set");
         }
         return List.copyOf(findings);
     }
@@ -68,7 +69,7 @@ public final class ReplicationSafetyPolicy {
                                                        Permissions permissions, Constraints constraints, Set<Integer> completedPartitions) {
         List<Finding> global = new ArrayList<>();
         List<Warning> warnings = new ArrayList<>(List.of(Warning.NON_ATOMIC_SNAPSHOT,
-                Warning.LEADER_NOT_PINNED_IN_SCHEMA_V1, Warning.EXECUTION_UNAVAILABLE));
+                Warning.LEADER_NOT_PINNED_IN_SCHEMA_V1));
         try {
             ReplicationPlanValidation.validate(plan);
             if (completedPartitions == null || completedPartitions.stream().anyMatch(id -> id == null || id < 0 || id >= plan.getPartitionCount())) {
@@ -95,7 +96,7 @@ public final class ReplicationSafetyPolicy {
                 || evidence.completedAtNanos().getAsLong() - constraints.readStartedNanos() < 0) {
             add(global, SNAPSHOT_NOT_FRESH, Condition.UNKNOWN);
         }
-        if (!Objects.equals(plan.getClusterId(), current.clusterId())) add(global, CLUSTER_ID_CHANGED, Condition.INVALID);
+        if (!Objects.equals(plan.getClusterId(), current.clusterId())) value(global, CLUSTER_ID_CHANGED, Condition.INVALID, current.clusterId(), plan.getClusterId());
         if (current.reassignmentState() != VERIFIED) add(global, REASSIGNMENT_UNKNOWN, Condition.UNKNOWN);
         if (current.reassignments().stream().anyMatch(p -> p.topic().equals(topicName))) add(global, ACTIVE_REASSIGNMENT, Condition.INVALID);
         if (evidence.elrMode() == ReplicationSafetyEvidence.ElrMode.UNKNOWN) add(global, ELR_MODE_UNKNOWN, Condition.UNKNOWN);
@@ -107,17 +108,17 @@ public final class ReplicationSafetyPolicy {
             add(global, TOPIC_NOT_FOUND, Condition.INVALID);
             return decisions(plan, global, Map.of(), warnings);
         }
-        if (!Objects.equals(plan.getTopicId(), topic.topicId())) add(global, TOPIC_ID_CHANGED, Condition.INVALID);
+        if (!Objects.equals(plan.getTopicId(), topic.topicId())) value(global, TOPIC_ID_CHANGED, Condition.INVALID, topic.topicId(), plan.getTopicId());
         Set<Integer> ids = new HashSet<>();
         if (topic.partitions().size() != plan.getPartitionCount() || topic.partitions().stream().anyMatch(p ->
                 p.id() < 0 || p.id() >= plan.getPartitionCount() || !ids.add(p.id()))) {
-            add(global, PARTITION_COUNT_CHANGED, Condition.INVALID);
+            value(global, PARTITION_COUNT_CHANGED, Condition.INVALID, Integer.toString(topic.partitions().size()), Integer.toString(plan.getPartitionCount()));
         }
         if (topic.minInSyncReplicas().isEmpty() || topic.minInSyncReplicas().getAsInt() <= 0) add(global, MIN_ISR_UNKNOWN, Condition.UNKNOWN);
         else {
             int minIsr = topic.minInSyncReplicas().getAsInt();
-            if (minIsr != plan.getExpectedMinInSyncReplicas()) add(global, MIN_ISR_CHANGED, Condition.INVALID);
-            if (plan.getTargetReplicationFactor() < minIsr) add(global, TARGET_BELOW_MIN_ISR, Condition.INVALID);
+            if (minIsr != plan.getExpectedMinInSyncReplicas()) value(global, MIN_ISR_CHANGED, Condition.INVALID, Integer.toString(minIsr), Integer.toString(plan.getExpectedMinInSyncReplicas()));
+            if (plan.getTargetReplicationFactor() < minIsr) value(global, TARGET_BELOW_MIN_ISR, Condition.INVALID, Integer.toString(plan.getTargetReplicationFactor()), "RF >= " + minIsr);
         }
         Set<Integer> plannedBrokers = new HashSet<>();
         for (BrokerSnapshot broker : plan.getBrokerSnapshot()) {
@@ -138,10 +139,12 @@ public final class ReplicationSafetyPolicy {
                 issues.add(finding(PARTITION_COUNT_CHANGED, Condition.INVALID, partitionId, null));
             } else {
                 List<Integer> expected = completedPartitions.contains(partitionId) ? assignment.getTargetReplicas() : assignment.getPreviousReplicas();
-                if (!expected.equals(actual.replicas())) issues.add(finding(PREVIOUS_REPLICAS_CHANGED, Condition.INVALID, partitionId, null));
+                if (!expected.equals(actual.replicas())) issues.add(new Finding(PREVIOUS_REPLICAS_CHANGED, Condition.INVALID,
+                        OptionalInt.of(partitionId), OptionalInt.empty(), actual.replicas().toString(), expected.toString()));
                 if (actual.leader().isEmpty()) issues.add(finding(LEADER_UNKNOWN, Condition.UNKNOWN, partitionId, null));
                 else if (!actual.replicas().contains(actual.leader().getAsInt()) || !actual.isr().contains(actual.leader().getAsInt())) issues.add(finding(LEADER_NOT_IN_ISR, Condition.INVALID, partitionId, null));
-                if (!actual.isr().equals(new HashSet<>(actual.replicas()))) issues.add(finding(ISR_INCOMPLETE, Condition.INVALID, partitionId, null));
+                if (!actual.isr().equals(new HashSet<>(actual.replicas()))) issues.add(new Finding(ISR_INCOMPLETE, Condition.INVALID,
+                        OptionalInt.of(partitionId), OptionalInt.empty(), new TreeSet<>(actual.isr()).toString(), actual.replicas().toString()));
                 if (assignment.getTargetReplicas().size() < assignment.getPreviousReplicas().size()
                         && !actual.isr().containsAll(assignment.getTargetReplicas())) issues.add(finding(TARGET_NOT_IN_ISR, Condition.INVALID, partitionId, null));
                 if (assignment.getTargetReplicas().size() < assignment.getPreviousReplicas().size() && actual.leader().isPresent()
@@ -153,17 +156,30 @@ public final class ReplicationSafetyPolicy {
                 Broker broker = current.brokers().get(id);
                 if (broker == null) { issues.add(finding(TOPOLOGY_CHANGED, Condition.INVALID, partitionId, id)); continue; }
                 check(issues, broker.reachable(), BROKER_OFFLINE, BROKER_HEALTH_UNKNOWN, partitionId, id);
-                check(issues, broker.unfenced(), BROKER_FENCED, BROKER_FENCING_UNKNOWN, partitionId, id);
+                if (!broker.fencingEstablished()) check(issues, broker.unfenced(), BROKER_FENCED, BROKER_FENCING_UNKNOWN, partitionId, id);
                 check(issues, broker.storage(), STORAGE_UNAVAILABLE, STORAGE_UNKNOWN, partitionId, id);
                 if (assignment.getTargetReplicas().contains(id)) {
-                    check(issues, broker.uncordoned(), BROKER_CORDONED, CORDONING_UNKNOWN, partitionId, id);
+                    if (!broker.cordoningEstablished()) check(issues, broker.uncordoned(), BROKER_CORDONED, CORDONING_UNKNOWN, partitionId, id);
                     check(issues, evidence.cordoningStable().getOrDefault(id, UNKNOWN), CORDONING_CHANGED, CORDONING_UNKNOWN, partitionId, id);
                     var admission = evidence.admissions().getOrDefault(id, ReplicationSafetyEvidence.Admission.unknown());
-                    check(issues, admission.placementAllowed(), PLACEMENT_FORBIDDEN, PLACEMENT_UNKNOWN, partitionId, id);
+                    var admissionProof = broker.capabilities().get(CapabilityAssessment.Capability.PLACEMENT_ADMISSION);
+                    boolean standardAdmission = admissionProof != null && !admissionProof.critical()
+                            && admissionProof.state() == CapabilityAssessment.State.UNKNOWN
+                            && admissionProof.reason() == CapabilityAssessment.Reason.NO_READ_ONLY_PLACEMENT_ADMISSION_API;
+                    if (broker.minimumUsableBytes().isPresent() && broker.minimumUsableBytes().getAsLong() <= 0)
+                        issues.add(finding(DISK_INSUFFICIENT, Condition.INVALID, partitionId, id));
+                    if (standardAdmission && admission.placementAllowed() == UNKNOWN) {
+                        if (!warnings.contains(Warning.PLACEMENT_ADMISSION_NOT_PROVEN)) warnings.add(Warning.PLACEMENT_ADMISSION_NOT_PROVEN);
+                    } else check(issues, admission.placementAllowed(), PLACEMENT_FORBIDDEN, PLACEMENT_UNKNOWN, partitionId, id);
                     if (!assignment.getPreviousReplicas().contains(id)) {
-                        if (broker.minimumUsableBytes().isEmpty()) issues.add(finding(DISK_CAPACITY_UNKNOWN, Condition.UNKNOWN, partitionId, id));
-                        else if (broker.minimumUsableBytes().getAsLong() <= 0) issues.add(finding(DISK_INSUFFICIENT, Condition.INVALID, partitionId, id));
-                        check(issues, admission.diskCapacitySufficient(), DISK_INSUFFICIENT, DISK_CAPACITY_UNKNOWN, partitionId, id);
+                        var diskProof = broker.capabilities().get(CapabilityAssessment.Capability.DISK_CAPACITY);
+                        boolean capacityRisk = standardAdmission && diskProof != null && !diskProof.critical()
+                                && diskProof.state() != CapabilityAssessment.State.UNSAFE;
+                        if (broker.minimumUsableBytes().isEmpty() && !capacityRisk) issues.add(finding(DISK_CAPACITY_UNKNOWN, Condition.UNKNOWN, partitionId, id));
+                        else if (broker.minimumUsableBytes().isPresent() && broker.minimumUsableBytes().getAsLong() <= 0) issues.add(finding(DISK_INSUFFICIENT, Condition.INVALID, partitionId, id));
+                        if (capacityRisk && admission.diskCapacitySufficient() == UNKNOWN) {
+                            if (!warnings.contains(Warning.DISK_RESERVE_NOT_PROVEN)) warnings.add(Warning.DISK_RESERVE_NOT_PROVEN);
+                        } else check(issues, admission.diskCapacitySufficient(), DISK_INSUFFICIENT, DISK_CAPACITY_UNKNOWN, partitionId, id);
                     }
                 }
             }
@@ -219,11 +235,18 @@ public final class ReplicationSafetyPolicy {
                 broker == null ? OptionalInt.empty() : OptionalInt.of(broker));
     }
     private static void add(List<Finding> into, Reason code, Condition condition) { into.add(Finding.global(code, condition)); }
+    private static void value(List<Finding> into, Reason code, Condition condition, String actual, String required) {
+        if (code == CLUSTER_ID_CHANGED || code == TOPIC_ID_CHANGED) {
+            try { actual = org.apache.kafka.common.Uuid.fromString(actual).toString().equals(actual) ? actual : "INVALID_ID"; }
+            catch (RuntimeException ex) { actual = "INVALID_ID"; }
+        }
+        into.add(new Finding(code, condition, OptionalInt.empty(), OptionalInt.empty(), actual == null ? "UNKNOWN" : actual, required));
+    }
     private static void observation(List<Finding> into, Observation value, Reason invalid, Reason unknown) {
         if (value != VERIFIED) add(into, value == UNAVAILABLE ? invalid : unknown, value == UNAVAILABLE ? Condition.INVALID : Condition.UNKNOWN);
     }
     private static void check(List<Finding> into, Observation value, Reason invalid, Reason unknown, int partition, int broker) {
-        if (value != VERIFIED) into.add(finding(value == UNAVAILABLE ? invalid : unknown,
-                value == UNAVAILABLE ? Condition.INVALID : Condition.UNKNOWN, partition, broker));
+        if (value != VERIFIED) into.add(new Finding(value == UNAVAILABLE ? invalid : unknown,
+                value == UNAVAILABLE ? Condition.INVALID : Condition.UNKNOWN, OptionalInt.of(partition), OptionalInt.of(broker), value == null ? "UNKNOWN" : value.name(), "VERIFIED"));
     }
 }

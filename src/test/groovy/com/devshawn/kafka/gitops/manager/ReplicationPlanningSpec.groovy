@@ -279,7 +279,7 @@ class ReplicationPlanningSpec extends Specification {
         cli.execute(*arguments) == 2
 
         where:
-        arguments << [['plan','--allow-replication-decrease'],['plan','--replication-rack-policy','BROKER_ONLY']]
+        arguments << [['plan','--no-manage-replication','--allow-replication-decrease'],['plan','--no-manage-replication','--replication-rack-policy','BROKER_ONLY']]
     }
 
     void 'multiple topics and config-map iteration yield reproducible full JSON'() {

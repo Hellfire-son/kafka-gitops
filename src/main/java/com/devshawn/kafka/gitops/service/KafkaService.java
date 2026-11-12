@@ -41,88 +41,78 @@ import java.time.Duration;
 public class KafkaService {
 
     private final KafkaGitopsConfig config;
+    private final ThreadLocal<Long> planningDeadline = new ThreadLocal<>();
 
     public KafkaService(KafkaGitopsConfig config) {
         this.config = config;
     }
 
     public List<AclBinding> getAcls() {
-        try (final Admin adminClient = buildAdminClient()) {
-            ResourcePatternFilter resourcePatternFilter = new ResourcePatternFilter(ResourceType.ANY, null, PatternType.ANY);
-            AccessControlEntryFilter accessFilter = new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY);
-            AclBindingFilter filter = new AclBindingFilter(resourcePatternFilter, accessFilter);
-            return new ArrayList<>(adminClient.describeAcls(filter).values().get());
-        } catch (InterruptedException | ExecutionException | RuntimeException ex) {
-            throw operationFailure("Error thrown when attempting to list Kafka ACLs", ex);
-        }
+        ResourcePatternFilter resource = new ResourcePatternFilter(ResourceType.ANY, null, PatternType.ANY);
+        AccessControlEntryFilter access = new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY);
+        return new ArrayList<>(request("Listing Kafka ACLs", admin -> admin.describeAcls(new AclBindingFilter(resource, access)).values()));
     }
 
-    public void createAcl(AclBinding aclBinding) {
-        try (final Admin adminClient = buildAdminClient()) {
-            adminClient.createAcls(Collections.singletonList(aclBinding)).all().get();
-        } catch (InterruptedException | ExecutionException | RuntimeException ex) {
-            throw operationFailure("Error thrown when attempting to create a Kafka ACL", ex);
-        }
+    public void createAcl(AclBinding binding) {
+        request("Creating a Kafka ACL", admin -> admin.createAcls(Collections.singletonList(binding)).all());
     }
 
-    public void deleteAcl(AclBinding aclBinding) {
-        try (final Admin adminClient = buildAdminClient()) {
-            adminClient.deleteAcls(Collections.singletonList(aclBinding.toFilter())).all().get();
-        } catch (InterruptedException | ExecutionException | RuntimeException ex) {
-            throw operationFailure("Error thrown when attempting to delete a Kafka ACL", ex);
-        }
+    public void deleteAcl(AclBinding binding) {
+        request("Deleting a Kafka ACL", admin -> admin.deleteAcls(Collections.singletonList(binding.toFilter())).all());
     }
 
-    public void createTopic(String topicName, TopicDetails topicDetails) {
-        try (final Admin adminClient = buildAdminClient()) {
-            short replicationFactor = topicDetails.getReplication().orElseThrow().shortValue();
-            NewTopic newTopic = new NewTopic(topicName, topicDetails.getPartitions(), replicationFactor);
-            newTopic.configs(topicDetails.getConfigs());
-            adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
-        } catch (InterruptedException | ExecutionException | RuntimeException ex) {
-            throw operationFailure("Error thrown when attempting to create a Kafka topic", ex);
-        }
+    public void createTopic(String name, TopicDetails details) {
+        NewTopic topic = new NewTopic(name, details.getPartitions(), details.getReplication().orElseThrow().shortValue());
+        topic.configs(details.getConfigs());
+        request("Creating a Kafka topic", admin -> admin.createTopics(Collections.singletonList(topic)).all());
     }
 
-    public void deleteTopic(String topicName) {
-        try (final Admin adminClient = buildAdminClient()) {
-            adminClient.deleteTopics(Collections.singletonList(topicName)).all().get();
-        } catch (InterruptedException | ExecutionException | RuntimeException ex) {
-            throw operationFailure("Error thrown when attempting to delete a Kafka topic", ex);
-        }
+    public void deleteTopic(String name) {
+        request("Deleting a Kafka topic", admin -> admin.deleteTopics(Collections.singletonList(name)).all());
     }
 
     public void updateTopicConfig(Map<ConfigResource, Collection<AlterConfigOp>> configs) {
-        try (final Admin adminClient = buildAdminClient()) {
-            adminClient.incrementalAlterConfigs(configs).all().get();
-        } catch (InterruptedException | ExecutionException | RuntimeException ex) {
-            throw operationFailure("Error thrown when attempting to update a Kafka topic config", ex);
-        }
+        request("Updating Kafka topic configuration", admin -> admin.incrementalAlterConfigs(configs).all());
     }
 
     public List<TopicListing> getTopics() {
-        try (final Admin adminClient = buildAdminClient()) {
-            Collection<TopicListing> topics = adminClient.listTopics().listings().get();
-            return new ArrayList<>(topics);
-        } catch (InterruptedException | ExecutionException | RuntimeException ex) {
-            throw operationFailure("Error thrown when attempting to list Kafka topics", ex);
+        return new ArrayList<>(request("Listing Kafka topics", admin -> admin.listTopics().listings()));
+    }
+
+    public Map<ConfigResource, Config> describeConfigsForTopics(List<String> names) {
+        if (names.isEmpty()) return Map.of();
+        List<ConfigResource> resources = names.stream().map(n -> new ConfigResource(ConfigResource.Type.TOPIC, n)).toList();
+        return request("Reading Kafka topic configurations", admin -> admin.describeConfigs(resources).all());
+    }
+
+    /** One command-wide budget for the read-only planning phase, in addition to each API timeout. */
+    public void beginPlanning() { planningDeadline.set(System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(partitionTimeoutMs())); }
+    public void endPlanning() { planningDeadline.remove(); }
+
+    private <T> T request(String operation, java.util.function.Function<Admin, KafkaFuture<T>> call) {
+        try {
+            long deadline = deadline();
+            remainingNanos(deadline);
+            if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
+            Admin admin = buildAdminClient();
+            try { return await(call.apply(admin), deadline); }
+            finally { admin.close(Duration.ZERO); }
+        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException ex) {
+            throw operationFailure(operation, ex);
         }
     }
 
-    public Map<ConfigResource, Config> describeConfigsForTopics(List<String> topicNames) {
-        try (final Admin adminClient = buildAdminClient()) {
-            List<ConfigResource> resources = topicNames.stream().map(it -> new ConfigResource(ConfigResource.Type.TOPIC, it)).toList();
-            return adminClient.describeConfigs(resources).all().get();
-        } catch (InterruptedException | ExecutionException | RuntimeException ex) {
-            throw operationFailure("Error thrown when attempting to describe a Kafka topic configuration", ex);
-        }
+    private long deadline() {
+        long value = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(partitionTimeoutMs());
+        Long shared = planningDeadline.get();
+        return shared == null ? value : Math.min(value, shared);
     }
 
     public Map<String, TopicDescription> describeTopics(List<String> names) {
         if (names.isEmpty()) {
             return Map.of();
         }
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(partitionTimeoutMs());
+        long deadline = deadline();
         Admin admin = partitionAdmin();
         try {
             try {
@@ -144,7 +134,7 @@ public class KafkaService {
         if (previousCount < 1 || targetCount <= previousCount) {
             throw new IllegalArgumentException("Partition changes require a positive previous count and a larger target count.");
         }
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(partitionTimeoutMs());
+        long deadline = deadline();
         Admin admin = partitionAdmin();
         try {
             try {
@@ -195,7 +185,7 @@ public class KafkaService {
     }
 
     private int partitionTimeoutMs() {
-        Object value = config.getConfig().getOrDefault(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 60000);
+        Object value = config.getConfig().getOrDefault(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 30000);
         try {
             int timeout = Integer.parseInt(value.toString());
             if (timeout > 0) {
@@ -205,7 +195,8 @@ public class KafkaService {
             // Do not include configuration values in validation errors.
         }
         throw new KafkaExecutionException("Invalid Kafka operation timeout.",
-                "default.api.timeout.ms must be a positive integer for partition operations.");
+                "Resource: default.api.timeout.ms; actual: INVALID; required: a positive integer in milliseconds.",
+                KafkaExecutionException.Code.INVALID_TIMEOUT);
     }
 
     private Admin partitionAdmin() {
@@ -217,7 +208,9 @@ public class KafkaService {
     }
 
     private static <T> T await(KafkaFuture<T> future, long deadline) throws InterruptedException, ExecutionException, TimeoutException {
-        return future.get(remainingNanos(deadline), TimeUnit.NANOSECONDS);
+        if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
+        try { return future.get(remainingNanos(deadline), TimeUnit.NANOSECONDS); }
+        catch (InterruptedException ex) { Thread.currentThread().interrupt(); throw ex; }
     }
 
     private static long remainingNanos(long deadline) throws TimeoutException {
@@ -233,10 +226,7 @@ public class KafkaService {
     }
 
     private static KafkaExecutionException partitionFailure(String operation, Throwable error) {
-        Throwable cause = error instanceof ExecutionException && error.getCause() != null ? error.getCause() : error;
-        // Kafka/server exception text may contain configuration values. Report only its category.
-        return new KafkaExecutionException("Error while " + operation + ".", "Failure type: " + cause.getClass().getSimpleName()
-                + ". No partition result was confirmed; changes may be partially applied. Re-plan before retrying.");
+        return com.devshawn.kafka.gitops.util.KafkaDiagnostics.failure(operation, error);
     }
 
     /** One read-only Admin session for the complete RF planning snapshot. */
@@ -248,7 +238,7 @@ public class KafkaService {
         return readReplicationSnapshot(names, true);
     }
 
-    /** Explicit internal binding only; ordinary CLI retains its closed production RF path. */
+    /** Lazy production binding; constructing it performs no Kafka requests. */
     public ReplicationApplication replicationApplication() {
         return new AdminReplicationApplication(this::buildAdminClient);
     }
@@ -259,17 +249,17 @@ public class KafkaService {
         }
         Admin admin = null;
         try {
-            int timeout = partitionTimeoutMs();
+            int timeout = remainingMs(deadline());
             admin = buildAdminClient();
             return ReplicationMetadataReader.read(admin, new TreeSet<>(names), timeout, preflight);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            throw new KafkaExecutionException("RF metadata collection interrupted.", "No RF changes were sent.");
+            throw com.devshawn.kafka.gitops.util.KafkaDiagnostics.failure("Reading RF metadata", ex);
         } catch (KafkaExecutionException ex) {
             // Reader diagnostics are fixed strings; buildAdminClient diagnostics may contain raw configuration.
-            throw new KafkaExecutionException("RF metadata collection failed.", "Cannot confirm the complete RF snapshot. No RF changes were sent.");
+            throw com.devshawn.kafka.gitops.util.KafkaDiagnostics.failure("Reading RF metadata", ex);
         } catch (ExecutionException | TimeoutException | RuntimeException ex) {
-            throw new KafkaExecutionException("RF metadata collection failed.", "Cannot confirm the complete RF snapshot. No RF changes were sent.");
+            throw com.devshawn.kafka.gitops.util.KafkaDiagnostics.failure("Reading RF metadata", ex);
         } finally {
             if (admin != null) {
                 try {
@@ -282,18 +272,25 @@ public class KafkaService {
     }
 
     protected Admin buildAdminClient() {
+        Object bootstrap = config.getConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
+        if (bootstrap == null || bootstrap.toString().isBlank() || bootstrap.toString().equals("[]")) {
+            throw new KafkaExecutionException("Kafka connection configuration is missing.",
+                    "Resource: bootstrap.servers; actual: UNKNOWN (not configured); required: an explicit bootstrap server. "
+                            + "Set --command-config or KAFKA_BOOTSTRAP_SERVERS. No connection was attempted.",
+                    KafkaExecutionException.Code.BOOTSTRAP_MISSING);
+        }
         try {
-            return AdminClient.create(config.getConfig());
+            Map<String, Object> properties = new java.util.HashMap<>(config.getConfig());
+            int timeout = partitionTimeoutMs();
+            properties.putIfAbsent(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, timeout);
+            properties.putIfAbsent(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, Math.min(10000, timeout));
+            return AdminClient.create(properties);
         } catch (RuntimeException ex) {
-            throw operationFailure("Error thrown when creating Kafka admin client", ex);
+            throw operationFailure("Creating Kafka Admin client", ex);
         }
     }
 
     private static KafkaExecutionException operationFailure(String message, Exception error) {
-        if (error instanceof InterruptedException) Thread.currentThread().interrupt();
-        Throwable cause = error instanceof ExecutionException && error.getCause() != null ? error.getCause() : error;
-        // Keep only the error category. Server/login/close exceptions may contain full credentials.
-        return new KafkaExecutionException(message, "Failure type: " + cause.getClass().getSimpleName()
-                + ". External exception text omitted. Verify Kafka state before retrying; changes may be partially applied.");
+        return com.devshawn.kafka.gitops.util.KafkaDiagnostics.failure(message, error);
     }
 }

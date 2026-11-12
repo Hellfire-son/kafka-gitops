@@ -22,7 +22,18 @@ topics:
 
 ## Configuration
 
-Currently, configuring `kafka-gitops` is done via environment variables. To configure properties, prefix them with `KAFKA_`. For example:
+Configure `kafka-gitops` through a Kafka client properties file or environment variables.
+Properties explicitly present in `--command-config` override environment values;
+environment fills properties absent from the file. An unreadable or malformed file
+fails the command. There is no implicit bootstrap server.
+
+For example, create `client.properties` containing `bootstrap.servers=localhost:9092`:
+
+```bash
+kafka-gitops --command-config client.properties plan -o plan.json
+```
+
+To configure properties through environment, prefix them with `KAFKA_`. For example:
 
 * `KAFKA_BOOTSTRAP_SERVERS`: Injects as `bootstrap.servers`
 * `KAFKA_CLIENT_ID`: Injects as `client.id`
@@ -64,28 +75,35 @@ Generate a plan by running:
 kafka-gitops plan
 ```
 
-This will generate an execution plan that looks like:
+For a newly created topic, an abbreviated text plan looks like:
 
 
 ```text
-Generating execution plan...
-
-An execution plan has been generated and is shown below.
-Resource actions are indicated with the following symbols:
-  + create
-
-The following actions will be performed:
-
-Topics: 1 to create, 0 to update, 0 to delete.
-
-+ [TOPIC] my-example-topic
-	+ cleanup.policy: compact
-
-
-ACLs: 0 to create, 0 to update, 0 to delete.
-
-Plan: 1 to create, 0 to update, 0 to delete.
+[CONFIG] Loading Kafka properties ...
+[CONNECT] Connecting to the explicitly configured Kafka bootstrap servers ...
+[METADATA] Reading Kafka resource and broker metadata ...
+[PLAN] Calculating and summarizing changes ...
+[PLAN] Topic: my-example-topic
+  Partitions: ABSENT -> 6
+  Replication: ABSENT -> 1
+  Config cleanup.policy: ABSENT -> compact
+[SUMMARY]
+  Proposed executable resource changes: 1
+  Status: PLAN_BUILT
+  Ready for apply: FRESH_PREFLIGHT_REQUIRED
 ```
+
+RF is managed by default for existing topics too. To retain the earlier behavior
+of ignoring RF drift, use `kafka-gitops plan --no-manage-replication`. The old
+`--manage-replication` remains a deprecated alias. Opposite flags together fail.
+Use `plan --help` to inspect placement options. `RACK_AWARE` is the default;
+`--replication-rack-policy BROKER_ONLY` explicitly accepts the rack-protection risk.
+
+Existing topics show current and proposed ordered replicas, broker/rack facts
+and reasons for exclusion. Unknown values are printed as `UNKNOWN`. Warnings
+describe extra operational risks; critical unknowns and unsafe conditions make
+the status `PLAN_BLOCKED`, return exit code 2 and prevent JSON export. Known
+changes remain visible. Exit code 0 covers `NO_CHANGES` and `PLAN_BUILT`.
 
 In most cases, you will want to output the plan to a file which can then be passed to the apply command. Plan files are `JSON` files. This can be done by running:
 
@@ -125,6 +143,21 @@ Example:
 kafka-gitops apply -p plan.json
 ```
 
+An RF decrease appears in `plan` without prior permission, but execution requires
+`kafka-gitops apply -p plan.json --allow-replication-decrease`. Global `--no-delete`
+forbids the decrease even with this permission. Permissions are never saved in
+JSON. Applying an RF plan with `--no-manage-replication` fails before any writes,
+including when both resource categories are skipped. Every RF apply performs
+fresh identity, assignment, leader/ISR, min ISR, broker and conflict checks and
+observes completion before reporting success. No automatic rollback occurs.
+
+Automation that previously ignored RF drift should explicitly opt out when
+planning. Text output has changed; use JSON for machine input and check the exit
+code before reusing an output file. A blocked plan preserves any existing file;
+an older file must not be treated as the output of a failed command. See the
+[compatibility report](design/development-task2-compatibility-rf-ux.md) for examples
+and the limits of unit-only compatibility evidence.
+
 An output of a successful apply would look like:
 
 ```text
@@ -143,12 +176,9 @@ Successfully applied.
 If there is a partial failure, successes will not be rolled back. A failure error would look something like:
 
 ```text
-[ERROR] Error thrown when attempting to create a Kafka topic:
-org.apache.kafka.common.errors.PolicyViolationException: Topic replication factor must be 3
-
-[ERROR] An error has occurred during the apply process.
-[ERROR] The apply process has stopped in place. There is no rollback.
-[ERROR] Fix the error, re-create a plan, and apply the new plan to continue.
+[ERROR] KAFKA_ERROR: Creating a Kafka topic
+State: KAFKA_ERROR. Failure type: PolicyViolationException.
+External exception text omitted. Verify Kafka state before retrying; changes may be partially applied.
 ```
 
 Congrats! You've successfully started using GitOps strategies to manage your cluster. If you have security on your cluster, read the [services][services] page to start defining services. 

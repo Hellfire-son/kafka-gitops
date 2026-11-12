@@ -59,7 +59,6 @@ class KafkaGitopsConfigLoggingSpec extends Specification {
         then:
         config.config['sasl.jaas.config'] == jaas
         loggedConfiguration() == [
-                'bootstrap.servers': 'localhost:9092',
                 'client.id': 'kafka-gitops',
                 'security.protocol': 'SASL_SSL',
                 'sasl.mechanism': mechanism
@@ -105,12 +104,12 @@ class KafkaGitopsConfigLoggingSpec extends Specification {
 
         then:
         settings.every { key, value -> config.config[key] == value }
-        loggedConfiguration() == ['bootstrap.servers': 'localhost:9092', 'client.id': 'kafka-gitops']
+        loggedConfiguration() == ['client.id': 'kafka-gitops']
         settings.keySet().every { !loggedMessages().contains(it) }
         !loggedMessages().contains('private-')
     }
 
-    void 'logs only safe effective settings from a properties file and environment overrides'() {
+    void 'logs only safe effective settings from a properties file with priority over environment'() {
         given:
         Map<String, String> settings = [
                 'bootstrap.servers': 'file-broker:9093',
@@ -134,15 +133,15 @@ class KafkaGitopsConfigLoggingSpec extends Specification {
         KafkaGitopsConfig config = KafkaGitopsConfigLoader.load(configFile)
 
         then:
-        config.config == settings + ['bootstrap.servers': 'environment-broker:9094']
+        config.config == settings
         loggedConfiguration() == [
-                'bootstrap.servers': 'environment-broker:9094',
+                'bootstrap.servers': 'file-broker:9093',
                 'client.id': 'file-client',
                 'security.protocol': 'SASL_SSL',
                 'sasl.mechanism': 'GSSAPI'
         ]
         !loggedMessages().contains('private-file')
-        !loggedMessages().contains('file-broker:9093')
+        !loggedMessages().contains('environment-broker:9094')
         !loggedMessages().contains('Unrecognized.MixedCase.Setting')
     }
 
@@ -195,7 +194,6 @@ class KafkaGitopsConfigLoggingSpec extends Specification {
         configurationEvents().size() == (verbose ? 1 : 0)
         !loggedMessages().contains('private-verbose')
         !verbose || loggedConfiguration() == [
-                'bootstrap.servers': 'localhost:9092',
                 'client.id': 'kafka-gitops',
                 'security.protocol': 'SASL_SSL',
                 'sasl.mechanism': mechanism

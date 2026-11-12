@@ -34,7 +34,7 @@ public class ApplyManager {
         this(managerConfig, kafkaService, null);
     }
 
-    /** Explicit Java integration seam. Default CLI construction does not enable RF execution. */
+    /** Explicit integration seam, also bound by the CLI to the fresh preflight/executor application. */
     public ApplyManager(ManagerConfig managerConfig, KafkaService kafkaService, ReplicationApplication replicationApplication) {
         this.managerConfig = managerConfig;
         this.kafkaService = kafkaService;
@@ -43,11 +43,31 @@ public class ApplyManager {
 
     public void applyPlan(DesiredPlan plan) {
         boolean rf = plan.getTopicPlans().stream().anyMatch(t -> t.getReplicationPlan().isPresent());
+        validateReplicationPermissions(plan);
         if (replicationApplication == null || !rf || managerConfig.isSkipTopicsDisabled()) {
             if (!managerConfig.isSkipTopicsDisabled()) applyTopics(plan);
             if (!managerConfig.isSkipAclsDisabled()) applyAcls(plan);
             return;
         }
+        applyWithReplication(plan);
+    }
+
+    /** Permission-only gate: safe before no-change filtering, metadata access or any write. */
+    public void validateReplicationPermissions(DesiredPlan plan) {
+        boolean rf = plan.getTopicPlans().stream().anyMatch(t -> t.getReplicationPlan().isPresent());
+        validatePermissions();
+        if (rf && !managerConfig.isManageReplicationRequested()) {
+            Map<String, ReplicationSafetyResult> blocked = new TreeMap<>();
+            var policy = new ReplicationSafetyPolicy();
+            var permissions = new ReplicationSafetyPolicy.Permissions(false,
+                    managerConfig.isAllowReplicationDecreaseRequested(), managerConfig.isDeleteDisabled());
+            plan.getTopicPlans().forEach(t -> t.getReplicationPlan().ifPresent(operation -> blocked.put(t.getName(),
+                    policy.blockedBeforeMetadata(operation, policy.permissions(operation, permissions)))));
+            throw new ReplicationPreflightException(blocked);
+        }
+    }
+
+    private void applyWithReplication(DesiredPlan plan) {
         validatePermissions();
         PlanValidation.validate(plan);
         var permissions = new ReplicationSafetyPolicy.Permissions(managerConfig.isManageReplicationRequested(),

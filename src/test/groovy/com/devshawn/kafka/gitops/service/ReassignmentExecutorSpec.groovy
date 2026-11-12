@@ -519,6 +519,7 @@ class ReassignmentExecutorSpec extends Specification {
         given:
         def h = harness()
         def admin = new PreflightReadOnlyAdmin()
+        admin.brokerEntries[1] = [] // No proof of cordoning applicability/clearance.
         def executor = new AdminReassignmentExecutor(admin.admin)
         long now = System.nanoTime()
 

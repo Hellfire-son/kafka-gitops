@@ -268,7 +268,7 @@ class ReplicationRegressionAuditSpec extends Specification {
         result.orders.assignments.size() == 2
         fake.calls.count('close') == 1
         !fake.calls.any { it.startsWith('alter') || it.startsWith('create') || it.startsWith('delete') || it.startsWith('incremental') }
-        current.brokers().values().every { it.unfenced() == UNKNOWN }
+        current.brokers().values().every { it.unfenced() == VERIFIED }
     }
 
     void 'planner output is invariant under map set and partition observation order'() {

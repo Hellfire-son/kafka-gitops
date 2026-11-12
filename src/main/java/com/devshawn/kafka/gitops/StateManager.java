@@ -7,6 +7,8 @@ import com.devshawn.kafka.gitops.config.ManagerConfig;
 import com.devshawn.kafka.gitops.domain.confluent.ServiceAccount;
 import com.devshawn.kafka.gitops.domain.options.GetAclOptions;
 import com.devshawn.kafka.gitops.domain.plan.DesiredPlan;
+import com.devshawn.kafka.gitops.domain.plan.PlanningReport;
+import com.devshawn.kafka.gitops.exception.PlanBlockedException;
 import com.devshawn.kafka.gitops.domain.state.AclDetails;
 import com.devshawn.kafka.gitops.domain.state.CustomAclDetails;
 import com.devshawn.kafka.gitops.domain.state.DesiredState;
@@ -54,11 +56,12 @@ public class StateManager {
 
     private final PlanManager planManager;
     private final ApplyManager applyManager;
+    private final KafkaService kafkaService;
 
     private boolean describeAclEnabled = false;
 
     public StateManager(ManagerConfig managerConfig, ParserService parserService) {
-        this(managerConfig, parserService, null);
+        this(managerConfig, parserService, null, null, true);
     }
 
     // Package-local injection keeps workflow tests independent of connection configuration and Kafka.
@@ -68,9 +71,14 @@ public class StateManager {
 
     StateManager(ManagerConfig managerConfig, ParserService parserService, KafkaService suppliedKafkaService,
                  ReplicationApplication replicationApplication) {
+        this(managerConfig, parserService, suppliedKafkaService, replicationApplication, false);
+    }
+
+    StateManager(ManagerConfig managerConfig, ParserService parserService, KafkaService suppliedKafkaService,
+                 ReplicationApplication replicationApplication, boolean bindApplication) {
         initializeLogger(managerConfig.isVerboseRequested());
         ObjectMapper objectMapper = initializeObjectMapper();
-        KafkaService kafkaService = suppliedKafkaService != null ? suppliedKafkaService
+        this.kafkaService = suppliedKafkaService != null ? suppliedKafkaService
                 : new KafkaService(KafkaGitopsConfigLoader.load(managerConfig.getConfigFile().orElse(null)));
 
         this.managerConfig = managerConfig;
@@ -78,7 +86,8 @@ public class StateManager {
         this.roleService = new RoleService();
         this.confluentCloudService = new ConfluentCloudService(objectMapper);
         this.planManager = new PlanManager(managerConfig, kafkaService, objectMapper);
-        this.applyManager = new ApplyManager(managerConfig, kafkaService, replicationApplication);
+        this.applyManager = new ApplyManager(managerConfig, kafkaService,
+                replicationApplication != null ? replicationApplication : bindApplication ? kafkaService.replicationApplication() : null);
     }
 
     public DesiredStateFile getAndValidateStateFile() {
@@ -99,26 +108,52 @@ public class StateManager {
         return desiredPlan;
     }
 
+    public PlanningReport planDetailed() {
+        planManager.beginReport();
+        return planManager.report(generatePlan(true));
+    }
+
+    public void writeReportedPlan(PlanningReport report) {
+        if (report.blocked()) throw new PlanBlockedException(report);
+        planManager.writePlanToFile(report.changes());
+    }
+
     private DesiredPlan generatePlan() {
+        return generatePlan(false);
+    }
+
+    private DesiredPlan generatePlan(boolean diagnostics) {
         DesiredState desiredState = getDesiredState();
         DesiredPlan.Builder desiredPlan = new DesiredPlan.Builder();
+        if (diagnostics) {
+            System.out.println("[CONNECT] Connecting to the explicitly configured Kafka bootstrap servers ...");
+            System.out.println("[METADATA] Reading Kafka resource and broker metadata ...");
+        }
+        kafkaService.beginPlanning();
+        try {
         if (!managerConfig.isSkipAclsDisabled()) {
-            planManager.planAcls(desiredState, desiredPlan);
+            if (diagnostics) planManager.planAclsReported(desiredState, desiredPlan);
+            else planManager.planAcls(desiredState, desiredPlan);
         }
 
         if (!managerConfig.isSkipTopicsDisabled()) {
-            planManager.planTopics(desiredState, desiredPlan);
+            if (diagnostics) planManager.planTopicsReported(desiredState, desiredPlan);
+            else planManager.planTopics(desiredState, desiredPlan);
         }
-
+        } finally { kafkaService.endPlanning(); }
+        if (diagnostics) System.out.println("[PLAN] Calculating and summarizing changes ...");
         return desiredPlan.build();
     }
 
     public DesiredPlan apply() {
         DesiredPlan desiredPlan = planManager.readPlanFromFile();
         if (desiredPlan == null) {
-            desiredPlan = generatePlan();
+            PlanningReport report = planDetailed();
+            if (report.blocked()) throw new PlanBlockedException(report);
+            desiredPlan = report.changes();
         }
 
+        applyManager.validateReplicationPermissions(desiredPlan);
         planManager.validatePlanHasChanges(desiredPlan, managerConfig.isDeleteDisabled(),
                 managerConfig.isSkipAclsDisabled(), managerConfig.isSkipTopicsDisabled());
 

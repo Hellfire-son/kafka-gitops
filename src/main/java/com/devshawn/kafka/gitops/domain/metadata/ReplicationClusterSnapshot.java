@@ -30,12 +30,38 @@ public record ReplicationClusterSnapshot(String clusterId, Map<Integer, Broker> 
                 ReplicationSafetyEvidence.unknown());
     }
 
-    public enum Observation { VERIFIED, UNAVAILABLE, UNKNOWN }
+    public enum Observation { VERIFIED, UNAVAILABLE, UNKNOWN, NOT_APPLICABLE }
 
     public record Broker(int id, Optional<String> rack, Observation reachable, Observation unfenced, Observation storage,
-                         Observation uncordoned, OptionalLong minimumUsableBytes) {
+                         Observation uncordoned, OptionalLong minimumUsableBytes,
+                         Map<CapabilityAssessment.Capability, CapabilityAssessment> capabilities) {
+        public Broker { capabilities = Map.copyOf(capabilities); }
+        public Broker(int id, Optional<String> rack, Observation reachable, Observation unfenced, Observation storage,
+                      Observation uncordoned, OptionalLong minimumUsableBytes) {
+            this(id, rack, reachable, unfenced, storage, uncordoned, minimumUsableBytes, Map.of());
+        }
+
+        public boolean cordoningEstablished() {
+            var proof = capabilities.get(CapabilityAssessment.Capability.CORDONING);
+            return uncordoned == Observation.VERIFIED || uncordoned == Observation.NOT_APPLICABLE
+                    && proof != null && proof.state() == CapabilityAssessment.State.NOT_APPLICABLE
+                    && (proof.reason() == CapabilityAssessment.Reason.METADATA_LEVEL_BELOW_CORDONING
+                    || proof.reason() == CapabilityAssessment.Reason.ZOOKEEPER_MODE_CONFIRMED);
+        }
+
+        public boolean fencingEstablished() {
+            var proof = capabilities.get(CapabilityAssessment.Capability.FENCING);
+            return unfenced == Observation.VERIFIED || unfenced == Observation.NOT_APPLICABLE
+                    && proof != null && proof.state() == CapabilityAssessment.State.NOT_APPLICABLE
+                    && proof.reason() == CapabilityAssessment.Reason.ZOOKEEPER_MODE_CONFIRMED;
+        }
+
         /** A preview candidate only. UNKNOWN fencing/capacity must not become an apply authorization. */
         public boolean isPreviewCandidate() {
+            if (!capabilities.isEmpty()) {
+                return reachable == Observation.VERIFIED && fencingEstablished() && storage == Observation.VERIFIED
+                        && cordoningEstablished() && capabilities.values().stream().noneMatch(CapabilityAssessment::blocks);
+            }
             return reachable == Observation.VERIFIED && unfenced != Observation.UNAVAILABLE && storage == Observation.VERIFIED
                     && uncordoned == Observation.VERIFIED && minimumUsableBytes.isPresent()
                     && minimumUsableBytes.getAsLong() > 0;

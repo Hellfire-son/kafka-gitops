@@ -26,6 +26,17 @@ This tool also generates the needed ACLs for each type of application. There is 
 
 Check out the **[Quick Start](/quick-start.md)** documentation to install `kafka-gitops` and get started.
 
+`plan` now includes replication-factor changes by default. It reads Kafka state
+and shows current values, desired values, proposed assignments, warnings and
+blocking conditions. `--no-manage-replication` explicitly excludes RF changes;
+the old `--manage-replication` remains an alias. A decrease requires independent
+`apply --allow-replication-decrease` permission and is forbidden by `--no-delete`.
+
+Use `--command-config client.properties` for explicit Kafka client settings;
+properties in the file take precedence over environment. Bootstrap servers must
+be configured explicitly. See the [RF compatibility and migration report](design/development-task2-compatibility-rf-ux.md)
+for capability evidence, JSON safeguards, exit codes and untested broker targets.
+
 ## Ideology
 
 The idea behind this project is to manage Kafka topics and ACLs through desired state files. These files define what your cluster should look like and `kafka-gitops` modifies your cluster's actual state to match the desired state file. Typically, this looks like:

@@ -41,6 +41,15 @@ public final class LogUtil {
         System.out.printf("[%s] %s%n", status, message);
     }
 
+    public static void printCommandFailure(RuntimeException error, boolean applying) {
+        printValidationResult(error.getMessage(), false);
+        String code = error instanceof com.devshawn.kafka.gitops.exception.ReplicationExecutionException ? "APPLY_FAILED"
+                : error instanceof com.devshawn.kafka.gitops.exception.ReplicationPreflightException ? "RF_PREFLIGHT_BLOCKED" : "STATE_VALIDATION_FAILED";
+        System.out.println("[ERROR] " + code + "; Resource: " + (applying ? "apply" : "plan")
+                + "; Actual: INVALID_OR_INCOMPLETE; Required: valid input and all mandatory preconditions; State: BLOCKED.");
+        System.out.println("  Action: resolve the reported condition, inspect Kafka state after any apply attempt, and re-plan.");
+    }
+
     /*
      * Plan
      */
@@ -258,7 +267,7 @@ public final class LogUtil {
     }
 
     public static void printKafkaExecutionError(KafkaExecutionException ex, boolean apply) {
-        System.out.printf("[%s] %s:%n%s%n%n", red("ERROR"), ex.getMessage(), ex.getExceptionMessage());
+        System.out.printf("[%s] %s: %s%n%s%n%n", red("ERROR"), ex.getCode(), ex.getMessage(), ex.getExceptionMessage());
         if (apply) {
             printApplyErrorMessage();
         } else {

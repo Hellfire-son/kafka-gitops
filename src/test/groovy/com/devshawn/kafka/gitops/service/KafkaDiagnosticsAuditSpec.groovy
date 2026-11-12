@@ -288,4 +288,5 @@ class DiagnosticAdmin implements InvocationHandler {
 
 class InterruptGetFuture extends KafkaFutureImpl {
     @Override Object get() { throw new InterruptedException('private-interrupted-password') }
+    @Override Object get(long timeout, java.util.concurrent.TimeUnit unit) { throw new InterruptedException('private-interrupted-password') }
 }

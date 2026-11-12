@@ -57,6 +57,7 @@ class ReplicationApplicationTestHarness extends ExecutorHarness {
     /** Uses the unmodified real reader and its System.nanoTime source; all Admin RPCs remain strict proxy fakes. */
     ReplicationApplication applicationWithRealReader() {
         realReaderAdmin = new PreflightReadOnlyAdmin(state:fake.current)
+        realReaderAdmin.brokerEntries[1] = [] // Applicable cordoning with no proof remains a mandatory UNKNOWN.
         def time = new AdminReassignmentExecutor.TimeSource() {
             @Override long nanoTime() { System.nanoTime() }
             @Override void pause(long nanos) { throw new AssertionError('No execution or waiting is allowed') }

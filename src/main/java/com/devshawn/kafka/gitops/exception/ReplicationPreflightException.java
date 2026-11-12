@@ -26,7 +26,14 @@ public final class ReplicationPreflightException extends ValidationException {
     private static String message(Map<String, ReplicationSafetyResult> results) {
         String codes = results.values().stream().flatMap(r -> r.reasons().stream()).map(f -> f.code().name())
                 .distinct().sorted().collect(Collectors.joining(", "));
+        String details = results.entrySet().stream().flatMap(entry -> entry.getValue().reasons().stream().distinct().map(f ->
+                "\n  Code: " + f.code() + "; Topic: " + entry.getKey()
+                        + "; Partition: " + (f.partition().isPresent() ? f.partition().getAsInt() : "ALL")
+                        + "; Broker: " + (f.brokerId().isPresent() ? f.brokerId().getAsInt() : "NOT_SCOPED")
+                        + "; Actual: " + f.actual() + "; Required: " + f.required() + "; State: " + f.condition()))
+                .limit(100).collect(Collectors.joining());
         return (codes.isEmpty() ? "RF execution not implemented. Preflight passed."
-                : "RF preflight BLOCKED: " + codes + ".") + " No topic operations were started; no Kafka resource writes were sent.";
+                : "RF preflight BLOCKED: " + codes + ".") + details
+                + "\n  Action: resolve the reported invariant and re-plan. No topic operations were started; no Kafka resource writes were sent.";
     }
 }

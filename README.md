@@ -39,8 +39,9 @@ Documentation on how to install and use this tool can be found on our [documenta
 Run `kafka-gitops` to view the help output.
 
 ```bash
-Usage: kafka-gitops [-hvV] [--no-delete] [--skip-acls] [--skip-topics] [-f=<file>] [COMMAND]
+Usage: kafka-gitops [-hvV] [--no-delete] [--skip-acls] [--skip-topics] [-c=<file>] [-f=<file>] [COMMAND]
 Manage Kafka resources with a desired state file.
+  -c, --command-config=<file>   Kafka client properties file.
   -f, --file=<file>   Specify the desired state file.
   -h, --help          Display this help message.
       --no-delete     Disable the ability to delete resources.
@@ -55,9 +56,30 @@ Commands:
   validate  Validates the desired state file.
 ```
 
+`plan` includes replication-factor changes by default and only reads Kafka state.
+Use `plan --no-manage-replication` to exclude RF changes; the old
+`--manage-replication` flag remains a deprecated compatibility alias. Use
+`plan --help` or `apply --help` for the RF and rack-policy options.
+
+RF decreases are visible in the plan, but applying them requires a fresh
+`apply --allow-replication-decrease`; `--no-delete` forbids decreases even with
+that permission. Apply always rechecks RF safety against fresh metadata. A
+blocked text preview is not exported as executable JSON. See the
+[migration notes and capability limits](docs/design/development-task2-compatibility-rf-ux.md).
+
 ## Configuration
 
-Currently, configuring bootstrap servers and other properties is done via environment variables:
+Configure Kafka through a standard properties file or environment variables:
+
+```bash
+java -jar build/libs/kafka-gitops-all.jar --command-config client.properties plan -o plan.json
+```
+
+Properties explicitly set in `--command-config` override the corresponding
+environment values. Environment supplies properties absent from the file.
+An unreadable or malformed file fails the command. Set `bootstrap.servers`
+explicitly: there is no implicit `localhost:9092` fallback. Local `validate`
+does not require a Kafka connection.
 
 To configure properties, prefix them with `KAFKA_`. For example:
 

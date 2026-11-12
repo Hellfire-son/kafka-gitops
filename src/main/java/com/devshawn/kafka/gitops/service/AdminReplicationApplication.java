@@ -79,6 +79,8 @@ final class AdminReplicationApplication implements ReplicationApplication {
                         completed(topic.getName(), rf, snapshot)));
             }
             if (checks.values().stream().anyMatch(c -> c.status() != ReplicationSafetyResult.Status.READY)) throw new ReplicationPreflightException(checks);
+            checks.forEach((name, check) -> check.warnings().forEach(warning ->
+                    System.out.println("[WARNING] " + warning + " Topic: " + name + "; fresh preflight passed; this operational risk remains.")));
             request = new Request(topics.stream().map(t -> new PreparedOperation(t.getName(), t.getReplicationPlan().orElseThrow(), checks.get(t.getName()))).toList(), permissions, started, deadline);
             AdminReassignmentExecutor executor = new AdminReassignmentExecutor(admin, settings, time, snapshots);
             executionStarted = true;

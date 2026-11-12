@@ -34,7 +34,7 @@ class ReplicationPreflightMetadataSpec extends Specification {
         result.safety().configsStable().orders == VERIFIED
         result.safety().cordoningStable().values().every { it == VERIFIED }
         result.safety().admissions().isEmpty()
-        result.brokers().values().every { it.unfenced() == com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot.Observation.UNKNOWN }
+        result.brokers().values().every { it.unfenced() == VERIFIED }
         fake.calls.count('describeFeatures') == 2
         fake.calls.count('describeConfigs') == 2
         fake.calls.count('close') == 1

@@ -3,6 +3,8 @@ package com.devshawn.kafka.gitops.service;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot.*;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence;
+import com.devshawn.kafka.gitops.domain.metadata.CapabilityAssessment;
+import static com.devshawn.kafka.gitops.domain.metadata.CapabilityAssessment.Capability.*;
 import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.common.KafkaFuture;
@@ -32,7 +34,7 @@ final class ReplicationMetadataReader {
     static ReplicationClusterSnapshot read(Admin admin, Set<String> requested, int timeoutMs, boolean preflight)
             throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
-        FeatureMetadata features = preflight ? features(admin, deadline) : null;
+        FeatureMetadata features = features(admin, deadline);
         DescribeClusterResult cluster = admin.describeCluster(new DescribeClusterOptions().timeoutMs(ms(deadline)));
         String clusterId = await(cluster.clusterId(), deadline);
         Map<Integer, Node> nodes = nodes(await(cluster.nodes(), deadline));
@@ -50,11 +52,14 @@ final class ReplicationMetadataReader {
         Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> directories = admin.describeLogDirs(nodes.keySet(),
                 new DescribeLogDirsOptions().timeoutMs(ms(deadline))).descriptions();
 
+        Map<Integer, Config> firstBrokerConfigs = new TreeMap<>();
         Map<Integer, Broker> brokers = new TreeMap<>();
         Map<Integer, Long> load = new TreeMap<>();
         for (Node node : nodes.values()) {
             Config config = optional(configs.get(new ConfigResource(ConfigResource.Type.BROKER, node.idString())), deadline);
-            Observation uncordoned = uncordoned(config);
+            firstBrokerConfigs.put(node.id(), config);
+            CapabilityAssessment cordon = KafkaCapabilities.cordoning(config, features);
+            Observation uncordoned = cordoningObservation(cordon);
             Observation reachable = UNKNOWN;
             Observation storage = UNKNOWN;
             OptionalLong usable = OptionalLong.empty();
@@ -92,9 +97,29 @@ final class ReplicationMetadataReader {
                 }
                 // Authorization/unsupported API/other failures remain UNKNOWN. Never expose the response text.
             }
-            // New Kafka accessors alone do not establish the full fencing/admission evidence.
-            // Preserve UNKNOWN and the existing fail-closed policy during the client migration.
-            brokers.put(node.id(), new Broker(node.id(), Optional.ofNullable(node.rack()), reachable, UNKNOWN, storage, uncordoned, usable));
+            // The default broker-endpoint DescribeCluster response excludes fenced brokers on old
+            // protocols too (KIP-1073). This is an API contract, not an inference from a missing field.
+            boolean zooKeeper = KafkaCapabilities.zooKeeper(config);
+            Observation unfenced = node.isFenced() ? UNAVAILABLE : zooKeeper ? NOT_APPLICABLE : VERIFIED;
+            Map<CapabilityAssessment.Capability, CapabilityAssessment> capabilities = new EnumMap<>(CapabilityAssessment.Capability.class);
+            capabilities.put(FENCING, new CapabilityAssessment(node.isFenced() ? CapabilityAssessment.State.UNSAFE
+                    : zooKeeper ? CapabilityAssessment.State.NOT_APPLICABLE : CapabilityAssessment.State.SUPPORTED,
+                    node.isFenced() ? CapabilityAssessment.Reason.BROKER_FENCED
+                    : zooKeeper ? CapabilityAssessment.Reason.ZOOKEEPER_MODE_CONFIRMED : CapabilityAssessment.Reason.LIVE_BROKER_METADATA, true));
+            capabilities.put(CORDONING, cordon);
+            capabilities.put(STORAGE, new CapabilityAssessment(storage == VERIFIED ? CapabilityAssessment.State.SUPPORTED
+                    : storage == UNAVAILABLE ? CapabilityAssessment.State.UNSAFE : CapabilityAssessment.State.UNKNOWN,
+                    storage == VERIFIED ? CapabilityAssessment.Reason.LOG_DIRECTORIES_HEALTHY
+                    : storage == UNAVAILABLE ? CapabilityAssessment.Reason.LOG_DIRECTORY_ERROR : CapabilityAssessment.Reason.LOG_DIRECTORIES_UNAVAILABLE, true));
+            capabilities.put(RACK, new CapabilityAssessment(node.rack() == null ? CapabilityAssessment.State.UNKNOWN : CapabilityAssessment.State.SUPPORTED,
+                    node.rack() == null ? CapabilityAssessment.Reason.RACK_NOT_REPORTED : CapabilityAssessment.Reason.RACK_REPORTED, false));
+            capabilities.put(DISK_CAPACITY, new CapabilityAssessment(usable.isEmpty() ? CapabilityAssessment.State.UNKNOWN
+                    : usable.getAsLong() > 0 ? CapabilityAssessment.State.SUPPORTED : CapabilityAssessment.State.UNSAFE,
+                    usable.isEmpty() ? CapabilityAssessment.Reason.USABLE_BYTES_NOT_REPORTED
+                    : usable.getAsLong() > 0 ? CapabilityAssessment.Reason.POSITIVE_USABLE_BYTES : CapabilityAssessment.Reason.NO_USABLE_BYTES, false));
+            capabilities.put(PLACEMENT_ADMISSION, new CapabilityAssessment(CapabilityAssessment.State.UNKNOWN,
+                    CapabilityAssessment.Reason.NO_READ_ONLY_PLACEMENT_ADMISSION_API, false));
+            brokers.put(node.id(), new Broker(node.id(), Optional.ofNullable(node.rack()), reachable, unfenced, storage, uncordoned, usable, capabilities));
         }
 
         Map<String, Topic> topics = new TreeMap<>();
@@ -118,8 +143,12 @@ final class ReplicationMetadataReader {
         Map<TopicPartition, PartitionReassignment> finalActive = await(admin.listPartitionReassignments(
                 new ListPartitionReassignmentsOptions().timeoutMs(ms(deadline))).reassignments(), deadline);
         require(active.keySet().equals(finalActive.keySet()), "Active reassignment changed during RF metadata collection. Re-plan.");
-        ReplicationSafetyEvidence evidence = ReplicationSafetyEvidence.unknown();
+        boolean confirmedZooKeeper = nodes.keySet().stream().allMatch(id -> KafkaCapabilities.zooKeeper(firstBrokerConfigs.get(id)));
+        // Preview retains the feature conclusion, but never a fresh execution authorization.
+        ReplicationSafetyEvidence evidence = new ReplicationSafetyEvidence(OptionalLong.empty(),
+                KafkaCapabilities.elr(features, confirmedZooKeeper), UNKNOWN, Map.of(), Map.of(), Map.of());
         if (preflight) {
+            FeatureMetadata afterFeatures = features(admin, deadline);
             Map<ConfigResource, KafkaFuture<Config>> finalConfigs = admin.describeConfigs(resources,
                     new DescribeConfigsOptions().includeSynonyms(true).timeoutMs(ms(deadline))).values();
             Map<String, Observation> stableTopics = new TreeMap<>();
@@ -130,21 +159,32 @@ final class ReplicationMetadataReader {
                         : latest.equals(previous.minInSyncReplicas()) ? VERIFIED : UNAVAILABLE);
                 topics.put(name, new Topic(previous.topicId(), previous.partitions(), latest));
             }
+            Map<Integer, Config> lastBrokerConfigs = new TreeMap<>();
             Map<Integer, Observation> stableCordoning = new TreeMap<>();
             for (int id : nodes.keySet()) {
-                Observation latest = uncordoned(optional(finalConfigs.get(new ConfigResource(ConfigResource.Type.BROKER, Integer.toString(id))), deadline));
+                Config latestConfig = optional(finalConfigs.get(new ConfigResource(ConfigResource.Type.BROKER, Integer.toString(id))), deadline);
+                lastBrokerConfigs.put(id, latestConfig);
+                CapabilityAssessment latestProof = KafkaCapabilities.cordoning(latestConfig, afterFeatures);
+                Observation latest = cordoningObservation(latestProof);
                 Broker previous = brokers.get(id);
                 stableCordoning.put(id, latest == UNKNOWN || previous.uncordoned() == UNKNOWN ? UNKNOWN
                         : latest == previous.uncordoned() ? VERIFIED : UNAVAILABLE);
-                brokers.put(id, new Broker(id, previous.rack(), previous.reachable(), previous.unfenced(), previous.storage(), latest, previous.minimumUsableBytes()));
+                Map<CapabilityAssessment.Capability, CapabilityAssessment> proofs = new EnumMap<>(previous.capabilities());
+                proofs.put(CORDONING, latestProof);
+                brokers.put(id, new Broker(id, previous.rack(), previous.reachable(), previous.unfenced(), previous.storage(), latest, previous.minimumUsableBytes(), proofs));
             }
-            FeatureMetadata afterFeatures = features(admin, deadline);
+            boolean zkBefore = nodes.keySet().stream().allMatch(id -> KafkaCapabilities.zooKeeper(firstBrokerConfigs.get(id)));
+            boolean zkAfter = nodes.keySet().stream().allMatch(id -> KafkaCapabilities.zooKeeper(lastBrokerConfigs.get(id)));
+            var mode = KafkaCapabilities.elr(afterFeatures, zkAfter);
             Observation stableFeatures = features == null || afterFeatures == null
                     || features.finalizedFeaturesEpoch().isEmpty() || afterFeatures.finalizedFeaturesEpoch().isEmpty()
                     ? UNKNOWN : features.equals(afterFeatures) ? VERIFIED : UNAVAILABLE;
+            if (mode == ReplicationSafetyEvidence.ElrMode.NOT_APPLICABLE
+                    && KafkaCapabilities.elr(features, zkBefore) == mode && Objects.equals(features, afterFeatures)
+                    && zkBefore == zkAfter) stableFeatures = VERIFIED;
             // Neither generic placement eligibility nor required per-replica disk reserve can be proven here.
             // Deliberately do not synthesize VERIFIED admissions from Node presence or positive usableBytes.
-            evidence = new ReplicationSafetyEvidence(OptionalLong.of(System.nanoTime()), elrMode(afterFeatures),
+            evidence = new ReplicationSafetyEvidence(OptionalLong.of(System.nanoTime()), mode,
                     stableFeatures, stableTopics, stableCordoning, Map.of());
         }
         return new ReplicationClusterSnapshot(clusterId, brokers, topics, finalActive.keySet(), VERIFIED, load, VERIFIED, evidence);
@@ -156,21 +196,6 @@ final class ReplicationMetadataReader {
         } catch (ExecutionException | RuntimeException ignored) {
             return null; // Unsupported, authorization failure or unavailable feature state is UNKNOWN.
         }
-    }
-
-    private static ReplicationSafetyEvidence.ElrMode elrMode(FeatureMetadata metadata) {
-        if (metadata != null && metadata.finalizedFeaturesEpoch().isPresent()) {
-            String name = "eligible.leader.replicas.version";
-            FinalizedVersionRange active = metadata.finalizedFeatures().get(name);
-            if (active != null && active.minVersionLevel() == 1 && active.maxVersionLevel() == 1) {
-                return ReplicationSafetyEvidence.ElrMode.ENABLED;
-            }
-            SupportedVersionRange supported = metadata.supportedFeatures().get(name);
-            if (active == null && supported != null && supported.minVersion() == 0 && supported.maxVersion() >= 1) {
-                return ReplicationSafetyEvidence.ElrMode.DISABLED;
-            }
-        }
-        return ReplicationSafetyEvidence.ElrMode.UNKNOWN;
     }
 
     private static boolean sameTopic(TopicDescription before, TopicDescription after) {
@@ -189,17 +214,17 @@ final class ReplicationMetadataReader {
         for (Node node : values) {
             require(node != null && node.id() >= 0 && result.put(node.id(), node) == null, "RF broker metadata is invalid.");
         }
-        require(!result.isEmpty(), "RF broker metadata is empty.");
+        require(!result.isEmpty(), "Resource: brokers; actual: 0; required: at least 1 live broker; state: UNKNOWN. Refresh metadata before re-planning.");
         return result;
     }
 
-    private static Observation uncordoned(Config config) {
-        ConfigEntry entry = config == null ? null : config.get("cordoned.log.dirs");
-        if (entry == null || entry.isSensitive() || entry.value() == null) {
-            return UNKNOWN;
-        }
-        // Conservative 3.9 fallback: any cordoned directory excludes the whole broker from new placement.
-        return entry.value().isBlank() ? VERIFIED : UNAVAILABLE;
+    private static Observation cordoningObservation(CapabilityAssessment assessment) {
+        return switch (assessment.state()) {
+            case SUPPORTED -> VERIFIED;
+            case NOT_APPLICABLE -> NOT_APPLICABLE;
+            case UNSAFE -> UNAVAILABLE;
+            case UNKNOWN -> UNKNOWN;
+        };
     }
 
     private static OptionalInt minIsr(Config config) {
@@ -245,7 +270,7 @@ final class ReplicationMetadataReader {
 
     private static void require(boolean condition, String message) {
         if (!condition) {
-            throw new KafkaExecutionException("Cannot collect RF planning metadata.", message);
+            throw new KafkaExecutionException("Cannot collect RF planning metadata.", message, KafkaExecutionException.Code.METADATA_INVALID);
         }
     }
 }

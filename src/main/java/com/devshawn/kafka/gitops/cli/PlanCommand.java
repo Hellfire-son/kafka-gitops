@@ -12,12 +12,14 @@ import com.devshawn.kafka.gitops.exception.ValidationException;
 import com.devshawn.kafka.gitops.exception.WritePlanOutputException;
 import com.devshawn.kafka.gitops.service.ParserService;
 import com.devshawn.kafka.gitops.util.LogUtil;
+import com.devshawn.kafka.gitops.util.PlanReportRenderer;
 import picocli.CommandLine;
 
 import java.io.File;
 import java.util.concurrent.Callable;
 
-@CommandLine.Command(name = "plan", description = "Generate an execution plan of changes to Kafka resources.")
+@CommandLine.Command(name = "plan", mixinStandardHelpOptions = true,
+        description = "Generate an execution plan of changes to Kafka resources.")
 public class PlanCommand implements Callable<Integer> {
 
     @CommandLine.Option(names = {"-o", "--output"}, paramLabel = "<file>",
@@ -27,10 +29,13 @@ public class PlanCommand implements Callable<Integer> {
     @CommandLine.Option(names = {"--include-unchanged"}, description = "Include unchanged resources in the plan file.")
     private boolean includeUnchanged = false;
 
-    @CommandLine.Option(names = "--manage-replication", description = "Plan explicit RF changes; RF apply remains unavailable.")
+    @CommandLine.Option(names = "--manage-replication", description = "Deprecated compatibility alias: RF planning is enabled by default.")
     private boolean manageReplication;
 
-    @CommandLine.Option(names = "--allow-replication-decrease", description = "Allow planning RF decreases; does not authorize apply.")
+    @CommandLine.Option(names = "--no-manage-replication", description = "Exclude replication-factor changes from this plan.")
+    private boolean noManageReplication;
+
+    @CommandLine.Option(names = "--allow-replication-decrease", description = "Compatibility option; decreases are always shown. Apply requires its own approval.")
     private boolean allowReplicationDecrease;
 
     @CommandLine.Option(names = "--replication-rack-policy", description = "RF placement policy: ${COMPLETION-CANDIDATES}. Default: RACK_AWARE.")
@@ -42,14 +47,17 @@ public class PlanCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         try {
-            if (!manageReplication && (allowReplicationDecrease || replicationRackPolicy != null)) {
-                throw new ValidationException("RF planning options require --manage-replication.");
+            if (noManageReplication && (manageReplication || allowReplicationDecrease || replicationRackPolicy != null)) {
+                throw new ValidationException("RF_OPTION_CONFLICT: --no-manage-replication cannot be combined with --manage-replication or other RF options.");
             }
             System.out.println("Generating execution plan...\n");
             ParserService parserService = new ParserService(parent.getStateFile());
-            StateManager stateManager = new StateManager(generateStateManagerConfig(), parserService);
-            DesiredPlan desiredPlan = stateManager.plan();
-            LogUtil.printPlan(desiredPlan, parent.isDeleteDisabled(), parent.areAclsDisabled(), parent.areTopicsDisabled());
+            System.out.println("[CONFIG] Loading Kafka properties ...");
+            StateManager stateManager = parent.createStateManager(generateStateManagerConfig(), parserService);
+            var report = stateManager.planDetailed();
+            PlanReportRenderer.print(report, parent.isDeleteDisabled(), parent.areAclsDisabled(), parent.areTopicsDisabled());
+            if (report.blocked()) return 2;
+            stateManager.writeReportedPlan(report);
             return 0;
         } catch (PlanIsUpToDateException ex) {
             LogUtil.printNoChangesMessage();
@@ -57,7 +65,7 @@ public class PlanCommand implements Callable<Integer> {
         } catch (MissingConfigurationException ex) {
             LogUtil.printGenericError(ex);
         } catch (ValidationException ex) {
-            LogUtil.printValidationResult(ex.getMessage(), false);
+            LogUtil.printCommandFailure(ex, false);
         } catch (KafkaExecutionException ex) {
             LogUtil.printKafkaExecutionError(ex);
         } catch (WritePlanOutputException ex) {
@@ -71,7 +79,7 @@ public class PlanCommand implements Callable<Integer> {
                 .setVerboseRequested(parent.isVerboseRequested())
                 .setDeleteDisabled(parent.isDeleteDisabled())
                 .setIncludeUnchangedEnabled(includeUnchanged)
-                .setManageReplicationRequested(manageReplication)
+                .setManageReplicationRequested(!noManageReplication)
                 .setAllowReplicationDecreaseRequested(allowReplicationDecrease)
                 .setReplicationRackPolicy(replicationRackPolicy == null ? RackAwarenessPolicy.RACK_AWARE : replicationRackPolicy)
                 .setNullableConfigFile(parent.getConfigFile())

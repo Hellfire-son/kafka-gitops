@@ -44,7 +44,7 @@ class ReplicationMetadataSpec extends Specification {
         result.topics().orders.partitions()*.leader()*.asInt == [0,1]
         result.topics().orders.partitions()*.isr() == [[0] as Set,[1] as Set]
         result.topics().orders.minInSyncReplicas().asInt == 1
-        result.brokers().values().every { it.isPreviewCandidate() && it.unfenced() == UNKNOWN }
+        result.brokers().values().every { it.isPreviewCandidate() && it.unfenced() == VERIFIED }
         result.replicaCounts() == [0:2L,1:2L,2:1L,3:0L]
         result.reassignmentState() == VERIFIED
         result.loadState() == VERIFIED
@@ -110,7 +110,7 @@ class ReplicationMetadataSpec extends Specification {
 
         then:
         b.storage() == storage
-        !b.isPreviewCandidate()
+        b.isPreviewCandidate() == (caseName == 'capacity omitted by broker')
 
         where:
         caseName | directories | storage
@@ -285,7 +285,7 @@ class ReplicationMetadataSpec extends Specification {
 
         then:
         thrown(com.devshawn.kafka.gitops.exception.ValidationException)
-        snapshot.brokers().values().every { it.unfenced() == UNKNOWN }
+        snapshot.brokers().values().every { it.unfenced() == VERIFIED }
     }
 
     void 'load includes hidden broker replicas and excludes future directory copies'() {
@@ -316,6 +316,7 @@ class ReplicationMetadataSpec extends Specification {
 
 /** Any non-allowlisted call throws, including every Kafka write API. No network implementation exists. */
 class ReadOnlyAdmin implements InvocationHandler {
+    int maximumTimeoutMs = 2000
     def state = snapshot([orders:[[0],[1]], '__internal':[[0,1,2]]])
     List<String> calls = []
     boolean internalRequested
@@ -336,6 +337,7 @@ class ReadOnlyAdmin implements InvocationHandler {
         String name = method.name
         if (name == 'toString') return 'ReadOnlyAdmin'
         calls.add(name)
+        if (name == 'describeFeatures') return new DescribeFeaturesResult(ReplicationMetadataSpec.failed(new UnsupportedVersionException('private-feature')))
         if (name == failStage) throw new IllegalStateException('private-response-text')
         if (name == 'close') {
             assert args[0] == Duration.ZERO
@@ -343,7 +345,7 @@ class ReadOnlyAdmin implements InvocationHandler {
         }
         assert name in ['describeCluster','listTopics','describeTopics','listPartitionReassignments','describeConfigs','describeLogDirs'] : name
         def opts = args.last()
-        assert opts.timeoutMs() > 0 && opts.timeoutMs() <= 2000
+        assert opts.timeoutMs() > 0 && opts.timeoutMs() <= maximumTimeoutMs
         switch(name) {
             case 'describeCluster':
                 def nodes = state.brokers().values().collect { new Node(it.id(),'unused.invalid',1,it.rack().orElse(null)) }

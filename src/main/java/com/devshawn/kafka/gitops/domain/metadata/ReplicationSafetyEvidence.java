@@ -16,7 +16,7 @@ public record ReplicationSafetyEvidence(OptionalLong completedAtNanos, ElrMode e
         admissions = Map.copyOf(admissions);
     }
 
-    public enum ElrMode { DISABLED, ENABLED, UNKNOWN }
+    public enum ElrMode { DISABLED, ENABLED, UNKNOWN, NOT_APPLICABLE }
 
     public record Admission(Observation placementAllowed, Observation diskCapacitySufficient) {
         public static Admission unknown() {

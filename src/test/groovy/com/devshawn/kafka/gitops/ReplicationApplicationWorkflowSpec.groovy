@@ -117,10 +117,10 @@ class ReplicationApplicationWorkflowSpec extends Specification {
 
         where:
         caseName | flags | global | expected
-        'manage absent' | [] | [] | 'MANAGE_REPLICATION_REQUIRED'
+        'manage explicitly disabled' | ['--no-manage-replication'] | [] | 'MANAGE_REPLICATION_REQUIRED'
         'decrease permission absent' | ['--manage-replication'] | [] | 'DECREASE_PERMISSION_REQUIRED'
         'no-delete overrides both' | ['--manage-replication','--allow-replication-decrease'] | ['--no-delete'] | 'NO_DELETE'
-        'allow without manage' | ['--allow-replication-decrease'] | [] | 'requires --manage-replication'
+        'allow with explicit disable' | ['--allow-replication-decrease','--no-manage-replication'] | [] | 'RF_OPTION_CONFLICT'
     }
 
     @Unroll
@@ -293,8 +293,7 @@ class ReplicationApplicationWorkflowSpec extends Specification {
 
         then:
         r.code == 2
-        r.text.contains('BROKER_FENCING_UNKNOWN')
-        r.text.contains('PLACEMENT_UNKNOWN')
+        r.text.contains('CORDONING_UNKNOWN')
         !r.text.contains('private-')
         h.executionCalls == 0
         !h.events.any { it.startsWith('legacy-') }

@@ -29,7 +29,7 @@ class ReplicationSafetyPolicySpec extends Specification {
         result.status() == Status.READY
         result.reasons().isEmpty()
         result.operations().every { it.status() == Status.READY }
-        result.warnings().contains(Warning.EXECUTION_UNAVAILABLE)
+        result.warnings().contains(Warning.NON_ATOMIC_SNAPSHOT)
 
         where:
         previous               | target

@@ -39,8 +39,18 @@ public class KafkaGitopsConfigLoader {
 
     public static KafkaGitopsConfig load(File configFile) {
         KafkaGitopsConfig.Builder builder = new KafkaGitopsConfig.Builder();
-        setConfigFromFile(configFile, builder);
         setConfigFromEnvironment(builder);
+        setConfigFromFile(configFile, builder);
+        Map<String, Object> effective = builder.getConfig();
+        String protocol = String.valueOf(effective.getOrDefault(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, ""));
+        // GSSAPI can use the JVM JAAS file/keytab; username/password shortcuts do not apply.
+        if (!protocol.equals("PLAINTEXT") && !protocol.equals("SSL")
+                && !"GSSAPI".equals(effective.get(SaslConfigs.SASL_MECHANISM))
+                && !effective.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {
+            builder.putAllConfig(handleAuthentication(effective.get(SaslConfigs.SASL_MECHANISM),
+                    System.getenv("KAFKA_SASL_JAAS_USERNAME"), System.getenv("KAFKA_SASL_JAAS_PASSWORD")));
+        }
+        handleDefaultConfig(builder);
         KafkaGitopsConfig config = builder.build();
         LOG.info("Kafka Config (safe diagnostic fields only): {}", configurationForLogging(config.getConfig()));
         return config;
@@ -56,32 +66,24 @@ public class KafkaGitopsConfigLoader {
             properties.forEach( (k, v) -> builder.putConfig(k.toString(), v));
         } catch (IOException | IllegalArgumentException ex) {
             // Never continue with defaults after an explicitly requested file failed to load.
-            throw new MissingConfigurationException("readable Kafka command-config file with valid properties syntax.");
+            throw new MissingConfigurationException("COMMAND_CONFIG_UNREADABLE; expected a readable Kafka properties file with valid syntax. Check --command-config.");
         }
     }
 
     private static void setConfigFromEnvironment(KafkaGitopsConfig.Builder builder) {
         Map<String, Object> config = new HashMap<>();
-        String username = null;
-        String password = null;
-
         for (Map.Entry<String, String> entry : System.getenv().entrySet()) {
             String key = entry.getKey();
             String value = entry.getValue();
-            if (key.equals("KAFKA_SASL_JAAS_USERNAME")) {
-                username = value;
-            } else if (key.equals("KAFKA_SASL_JAAS_PASSWORD")) {
-                password = value;
+            if (key.equals("KAFKA_SASL_JAAS_USERNAME") || key.equals("KAFKA_SASL_JAAS_PASSWORD")) {
+                continue; // Shortcuts are evaluated only after file properties have taken precedence.
             } else if (key.startsWith("KAFKA_")) {
                 String newKey = key.substring(6).replace("_", ".").toLowerCase(Locale.ROOT);
                 config.put(newKey, value);
             }
         }
 
-        config.putAll(handleAuthentication(config.get(SaslConfigs.SASL_MECHANISM), username, password));
-
         builder.putAllConfig(config);
-        handleDefaultConfig(builder);
     }
 
     private static Map<String, Object> configurationForLogging(Map<String, Object> config) {
@@ -95,10 +97,6 @@ public class KafkaGitopsConfigLoader {
     }
 
     private static void handleDefaultConfig(KafkaGitopsConfig.Builder builder) {
-        if (!builder.getConfig().containsKey(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)) {
-            builder.putConfig(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        }
-
         if (!builder.getConfig().containsKey(CommonClientConfigs.CLIENT_ID_CONFIG)) {
             builder.putConfig(CommonClientConfigs.CLIENT_ID_CONFIG, "kafka-gitops");
         }

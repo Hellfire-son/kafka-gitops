@@ -8,6 +8,8 @@ import com.devshawn.kafka.gitops.domain.plan.TopicConfigPlan;
 import com.devshawn.kafka.gitops.domain.plan.TopicPlan;
 import com.devshawn.kafka.gitops.domain.plan.TopicPartitionPlan;
 import com.devshawn.kafka.gitops.domain.plan.TopicReplicationPlan;
+import com.devshawn.kafka.gitops.domain.plan.PlanningReport;
+import com.devshawn.kafka.gitops.exception.PlanBlockedException;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot;
 import com.devshawn.kafka.gitops.domain.state.AclDetails;
 import com.devshawn.kafka.gitops.domain.state.DesiredState;
@@ -58,6 +60,31 @@ public class PlanManager {
     private final ManagerConfig managerConfig;
     private final KafkaService kafkaService;
     private final ObjectMapper objectMapper;
+    private boolean diagnosticMode;
+    private final Map<String, PlanningReport.TopicPreview> previews = new TreeMap<>();
+    private final List<PlanningReport.Issue> planningIssues = new ArrayList<>();
+
+    public PlanningReport report(DesiredPlan changes) { return new PlanningReport(changes, previews, planningIssues); }
+    public void beginReport() { diagnosticMode = true; previews.clear(); planningIssues.clear(); }
+
+    public void planTopicsReported(DesiredState desired, DesiredPlan.Builder changes) {
+        diagnosticMode = true;
+        desired.getTopics().forEach((name, details) -> previews.put(name,
+                new PlanningReport.TopicPreview(details, false, false, java.util.Optional.empty(), Map.of(), Map.of())));
+        try { planTopics(desired, changes); }
+        catch (KafkaExecutionException ex) { problem(ex.getCode().name(), "topics", "UNKNOWN", "readable metadata", "UNKNOWN", ex.getExceptionMessage()); }
+        catch (ValidationException ex) { problem("TOPIC_PLANNING_BLOCKED", "topics", "INVALID", "valid topic changes", "UNSAFE", ex.getMessage()); }
+    }
+
+    public void planAclsReported(DesiredState desired, DesiredPlan.Builder changes) {
+        try { planAcls(desired, changes); }
+        catch (KafkaExecutionException ex) { problem(ex.getCode().name(), "ACLs", "UNKNOWN", "readable ACL metadata", "UNKNOWN", ex.getExceptionMessage()); }
+    }
+
+    private void problem(String code, String resource, String actual, String required, String state, String reason) {
+        planningIssues.add(new PlanningReport.Issue(PlanningReport.Severity.BLOCKED, code, resource, actual, required, state,
+                reason, "Resolve this condition and re-plan; no writes were sent."));
+    }
 
     public PlanManager(ManagerConfig managerConfig, KafkaService kafkaService, ObjectMapper objectMapper) {
         this.managerConfig = managerConfig;
@@ -92,13 +119,23 @@ public class PlanManager {
         List<String> topicNames = topics.stream().map(TopicListing::name).toList();
         List<String> managedTopics = desiredState.getTopics().keySet().stream().filter(topicNames::contains).toList();
         Map<String, TopicDescription> descriptions = kafkaService.describeTopics(managedTopics);
+        if (diagnosticMode) desiredState.getTopics().forEach((name, details) -> previews.put(name,
+                new PlanningReport.TopicPreview(details, true, topicNames.contains(name), java.util.Optional.ofNullable(descriptions.get(name)), Map.of(), Map.of())));
         Map<String, List<ConfigEntry>> topicConfigs = fetchTopicConfigurations(topicNames);
+        if (diagnosticMode) previews.replaceAll((name, preview) -> {
+            Map<String, String> values = new TreeMap<>();
+            topicConfigs.getOrDefault(name, List.of()).forEach(c -> {
+                if (!c.isSensitive() && !TopicConfigSecurity.isSensitive(c.name()) && c.value() != null) values.put(c.name(), c.value());
+            });
+            return new PlanningReport.TopicPreview(preview.desired(), preview.existenceKnown(), preview.exists(), preview.current(), preview.brokers(), values);
+        });
         Map<String, TopicReplicationPlan> replications = managerConfig.isManageReplicationRequested()
-                ? planReplications(desiredState, descriptions) : Map.of();
+                ? diagnosticMode ? planReportedReplications(desiredState, descriptions) : planReplications(desiredState, descriptions) : Map.of();
 
         Map<String, TopicDetails> orderedTopics = managerConfig.isManageReplicationRequested()
                 ? new TreeMap<>(desiredState.getTopics()) : desiredState.getTopics();
         orderedTopics.forEach((key, value) -> {
+            try {
             TopicPlan.Builder topicPlan = new TopicPlan.Builder()
                     .setName(key)
                     .setTopicDetails(value);
@@ -125,8 +162,15 @@ public class PlanManager {
                 }
                 if (replications.containsKey(key)) {
                     topicPlan.setReplicationPlan(replications.get(key)).setAction(PlanAction.UPDATE);
-                } else if (!managerConfig.isManageReplicationRequested()) {
+                } else if (!managerConfig.isManageReplicationRequested() && !diagnosticMode) {
                     LogUtil.printReplicationWarning(key, value, description);
+                }
+                if (diagnosticMode && !managerConfig.isManageReplicationRequested() && value.getReplication().isPresent()
+                        && description.partitions().stream().anyMatch(p -> p.replicas().size() != value.getReplication().get())) {
+                    planningIssues.add(new PlanningReport.Issue(PlanningReport.Severity.WARNING, "RF_MANAGEMENT_DISABLED", key,
+                            description.partitions().stream().map(p -> p.replicas().size()).distinct().toList().toString(),
+                            value.getReplication().get().toString(), "NOT_MANAGED", "RF was explicitly excluded by --no-manage-replication.",
+                            "Remove --no-manage-replication to include RF in the plan."));
                 }
                 planTopicConfigurations(key, value, topicConfigs.get(key), topicPlan);
                 if (replications.containsKey(key)) {
@@ -139,6 +183,10 @@ public class PlanManager {
             }
 
             desiredPlan.addTopicPlans(topicPlan.build());
+            } catch (ValidationException ex) {
+                if (!diagnosticMode) throw ex;
+                problem("TOPIC_CHANGE_UNSAFE", key, "INVALID", "compatible changes", "UNSAFE", ex.getMessage());
+            }
         });
 
         List<TopicListing> orderedCurrent = managerConfig.isManageReplicationRequested()
@@ -168,6 +216,100 @@ public class PlanManager {
         if (managerConfig.isManageReplicationRequested()) {
             PlanValidation.validate(desiredPlan.build());
         }
+    }
+
+    private Map<String, TopicReplicationPlan> planReportedReplications(DesiredState desired, Map<String, TopicDescription> descriptions) {
+        Map<String, Integer> targets = new TreeMap<>();
+        desired.getTopics().forEach((name, details) -> {
+            TopicDescription current = descriptions.get(name);
+            if (current != null && details.getReplication().isPresent()
+                    && current.partitions().stream().anyMatch(p -> p.replicas().size() != details.getReplication().get())) {
+                if (details.getPartitions() != current.partitions().size()) {
+                    problem("PARTITION_RF_CONFLICT", name, current.partitions().size() + " partitions", Integer.toString(details.getPartitions()),
+                            "UNSAFE", "Plan RF and partition count changes separately.");
+                } else targets.put(name, details.getReplication().get());
+            }
+        });
+        if (targets.isEmpty()) return Map.of();
+        ReplicationClusterSnapshot snapshot;
+        try { snapshot = kafkaService.readReplicationSnapshot(targets.keySet()); }
+        catch (KafkaExecutionException ex) {
+            targets.forEach((name, rf) -> problem(ex.getCode().name(), name, "RF metadata UNKNOWN", "RF " + rf,
+                    "UNKNOWN", ex.getExceptionMessage()));
+            return Map.of();
+        }
+        Map<String, TopicReplicationPlan> plans = new TreeMap<>();
+        Map<Integer, Long> projectedLoad = new TreeMap<>(snapshot.replicaCounts());
+        for (var target : targets.entrySet()) {
+            String name = target.getKey();
+            int rf = target.getValue();
+            var preview = previews.get(name);
+            previews.put(name, new PlanningReport.TopicPreview(preview.desired(), true, true, preview.current(), snapshot.brokers(), preview.currentConfigValues()));
+            var before = descriptions.get(name);
+            var topic = snapshot.topics().get(name);
+            if (topic == null || !before.topicId().toString().equals(topic.topicId()) || before.partitions().size() != topic.partitions().size()
+                    || before.partitions().stream().anyMatch(p -> topic.partitions().stream().noneMatch(a -> a.id() == p.partition()
+                    && a.replicas().equals(p.replicas().stream().map(n -> n.id()).toList())))) {
+                problem("TOPIC_METADATA_CHANGED", name, "changed identity/assignments", "stable initial metadata", "UNSAFE", "Metadata changed during planning.");
+                continue;
+            }
+            snapshot.brokers().forEach((id, broker) -> broker.capabilities().forEach((capability, assessment) -> {
+                if (assessment.state() == com.devshawn.kafka.gitops.domain.metadata.CapabilityAssessment.State.UNKNOWN && !assessment.critical()) {
+                    planningIssues.add(new PlanningReport.Issue(PlanningReport.Severity.WARNING, assessment.reason().name(), name + "/broker-" + id,
+                            "UNKNOWN", capability.name(), assessment.state().name(), "This additional operational risk is not established by the available Admin evidence.",
+                            "Review broker capacity/admission policy; apply still rechecks all critical invariants."));
+                }
+            }));
+            var elr = snapshot.safety().elrMode();
+            if (elr == com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.UNKNOWN
+                    || elr == com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.ENABLED) {
+                problem(elr == com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.UNKNOWN
+                                ? "ELR_MODE_UNKNOWN" : "ELR_UNSUPPORTED", name, elr.name(), "ELR DISABLED or positively NOT_APPLICABLE",
+                        elr.name(), "RF execution requires a known ELR mode; the current assignment algorithm does not support enabled ELR.");
+                // Keep broker diagnostics and other known changes, without inventing executable assignments.
+                continue;
+            }
+            try {
+                ReplicationClusterSnapshot projected = new ReplicationClusterSnapshot(snapshot.clusterId(), snapshot.brokers(), snapshot.topics(),
+                        snapshot.reassignments(), snapshot.reassignmentState(), projectedLoad, snapshot.loadState(), snapshot.safety());
+                // Preview never carries execution permissions. Decreases are visible even before apply approval.
+                var plan = new ReplicaAssignmentPlanner().plan(projected, Map.of(name, rf), managerConfig.getReplicationRackPolicy(), true, false).get(name);
+                if (plan != null) {
+                    var excludedTargets = plan.getAssignments().stream().flatMap(a -> a.getTargetReplicas().stream()).distinct().sorted()
+                            .filter(id -> snapshot.brokers().get(id) == null || !snapshot.brokers().get(id).isPreviewCandidate()
+                                    || !snapshot.brokers().get(id).fencingEstablished()).toList();
+                    if (!excludedTargets.isEmpty()) {
+                        problem("TARGET_BROKER_INELIGIBLE", name, "Excluded target brokers=" + excludedTargets,
+                                "all target brokers have established core eligibility", "UNSAFE_OR_UNKNOWN",
+                                "Preserving an existing replica does not bypass target safety. Inspect the broker observations above.");
+                        continue;
+                    }
+                    plans.put(name, plan);
+                    if (plan.getRackPolicy() == com.devshawn.kafka.gitops.enums.RackAwarenessPolicy.BROKER_ONLY)
+                        planningIssues.add(new PlanningReport.Issue(PlanningReport.Severity.WARNING, "BROKER_ONLY", name,
+                                "rack policy disabled", "review rack failure tolerance", "OPERATIONAL_RISK",
+                                "No rack failure protection is established.", "Use RACK_AWARE when reliable rack metadata is available."));
+                    if (snapshot.brokers().values().stream().anyMatch(b -> !b.capabilities().isEmpty() && b.minimumUsableBytes().isPresent()))
+                        planningIssues.add(new PlanningReport.Issue(PlanningReport.Severity.WARNING, "DISK_RESERVE_NOT_PROVEN", name,
+                                "transfer volume/growth/concurrent placement UNKNOWN", "sufficient disk reserve", "UNKNOWN",
+                                "Positive usableBytes does not prove sufficient capacity for the proposed copy.", "Review disk headroom before apply."));
+                    plan.getAssignments().forEach(a -> {
+                        a.getPreviousReplicas().forEach(id -> projectedLoad.merge(id, -1L, Long::sum));
+                        a.getTargetReplicas().forEach(id -> projectedLoad.merge(id, 1L, Long::sum));
+                    });
+                    if (plan.requiresDecreaseApproval()) planningIssues.add(new PlanningReport.Issue(PlanningReport.Severity.WARNING,
+                            managerConfig.isDeleteDisabled() ? "NO_DELETE" : "DECREASE_PERMISSION_REQUIRED", name,
+                            "RF decrease proposed", "apply --allow-replication-decrease without --no-delete", "APPLY_PERMISSION_REQUIRED",
+                            "Planning is read-only; these permissions are checked independently at apply.", "Review the decrease before applying."));
+                }
+            } catch (ValidationException ex) {
+                long eligible = snapshot.brokers().values().stream().filter(b -> b.isPreviewCandidate() && b.fencingEstablished()).count();
+                problem(eligible < rf ? "INSUFFICIENT_BROKERS" : "RF_PLANNING_BLOCKED", name,
+                        "Discovered=" + snapshot.brokers().size() + ", eligible=" + eligible,
+                        "RF=" + rf, "BLOCKED", ex.getMessage());
+            }
+        }
+        return plans;
     }
 
     private Map<String, TopicReplicationPlan> planReplications(DesiredState desiredState,
@@ -207,7 +349,7 @@ public class PlanManager {
         if (plans.values().stream().anyMatch(p -> p.getRackPolicy() == com.devshawn.kafka.gitops.enums.RackAwarenessPolicy.BROKER_ONLY)) {
             System.out.println("[WARNING] BROKER_ONLY disables rack awareness; rack failure protection is not established.");
         }
-        System.out.println("[WARNING] RF planning preview only: replica counts do not prove disk capacity. Fencing, placement eligibility and capacity require a fresh apply preflight; RF apply is unavailable.");
+        System.out.println("[WARNING] RF planning preview only: replica counts do not prove disk capacity. Apply requires a fresh safety preflight.");
         return plans;
     }
 
@@ -339,6 +481,7 @@ public class PlanManager {
     }
 
     public void writePlanToFile(DesiredPlan desiredPlan) {
+        if (report(desiredPlan).blocked()) throw new PlanBlockedException(report(desiredPlan));
         managerConfig.getPlanFile().ifPresent(planFile -> {
             try {
                 DesiredPlan outputPlan = managerConfig.isIncludeUnchangedEnabled() ? desiredPlan : desiredPlan.toChangesOnlyPlan();

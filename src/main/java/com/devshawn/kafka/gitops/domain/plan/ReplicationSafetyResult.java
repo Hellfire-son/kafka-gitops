@@ -17,7 +17,8 @@ public record ReplicationSafetyResult(List<Finding> reasons, List<Warning> warni
     public enum Status { READY, BLOCKED }
     public enum Condition { INVALID, UNKNOWN }
     public enum Operation { INCREASE, DECREASE, UNCHANGED }
-    public enum Warning { NON_ATOMIC_SNAPSHOT, BROKER_ONLY, LEADER_NOT_PINNED_IN_SCHEMA_V1, EXECUTION_UNAVAILABLE }
+    public enum Warning { NON_ATOMIC_SNAPSHOT, BROKER_ONLY, LEADER_NOT_PINNED_IN_SCHEMA_V1, EXECUTION_UNAVAILABLE,
+        PLACEMENT_ADMISSION_NOT_PROVEN, DISK_RESERVE_NOT_PROVEN }
     public enum Reason {
         STRUCTURE_INVALID, INVALID_PERMISSION_COMBINATION, MANAGE_REPLICATION_REQUIRED, DECREASE_PERMISSION_REQUIRED,
         NO_DELETE, CLUSTER_ID_CHANGED, TOPIC_NOT_FOUND, TOPIC_ID_CHANGED, PARTITION_COUNT_CHANGED,
@@ -32,7 +33,11 @@ public record ReplicationSafetyResult(List<Finding> reasons, List<Warning> warni
         METADATA_UNAVAILABLE, PREFLIGHT_NOT_PERFORMED
     }
 
-    public record Finding(Reason code, Condition condition, OptionalInt partition, OptionalInt brokerId) {
+    public record Finding(Reason code, Condition condition, OptionalInt partition, OptionalInt brokerId,
+                          String actual, String required) {
+        public Finding(Reason code, Condition condition, OptionalInt partition, OptionalInt brokerId) {
+            this(code, condition, partition, brokerId, condition == Condition.UNKNOWN ? "UNKNOWN" : "UNSAFE", "established safety invariant");
+        }
         public static Finding global(Reason code, Condition condition) {
             return new Finding(code, condition, OptionalInt.empty(), OptionalInt.empty());
         }
