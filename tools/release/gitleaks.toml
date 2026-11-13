@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+# Keep upstream rules; also detect low-entropy inline JAAS/demo passwords.
+# Findings require review, not a blanket test/demo allowlist.
+title = "Kafka GitOps release scan"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "gitops-inline-password"
+description = "Quoted inline password or JAAS user credential (including demo/fixtures)"
+regex = '''(?i)(?:password|user_[a-z0-9_-]+)\s*=\s*["']([^"'\r\n]{1,256})["']'''
+secretGroup = 1
+keywords = ["password", "user_"]

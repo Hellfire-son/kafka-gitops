@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+> Historical stage evidence: the dates, versions, hashes and test outcomes below describe that stage and artifact. Personal machine paths were anonymized for publication. See [0.4.0 preparation](../release/v0.4.0-release-preparation.md) for the current release status.
+
 # Kafka 3.x: совместимость одного Kafka GitOps JAR
 
 Дата: 13.11.2026, Europe/Moscow. Ветка `feature/ads-gitops`, HEAD
@@ -46,7 +49,7 @@ NOT_TESTED: авторизационная ошибка в каждом PLAINTEX
 
 | Параметр | Kafka 3.2.3 | Kafka 3.7.1 | Kafka 4.4.0 |
 |---|---|---|---|
-| Каталог | `F:\DEV\GitOps\kafka-lab-323` | `F:\DEV\GitOps\kafka-lab-371` | `F:\DEV\GitOps\kafka-lab` |
+| Каталог | `../kafka-lab-323` | `../kafka-lab-371` | `../kafka-lab` |
 | Compose project | `kafka-gitops-323-lab` | `kafka-gitops-371-lab` | `kafka-gitops-lab` |
 | Cluster ID | `vqvmhB4iTgaEqrNq-LdfrQ` | `GV57l31pRMa-yIjZQBWyww` | `4L6g3nShT-eMCtK--X86sw` |
 | Host ports, только 127.0.0.1 | 23292/23293/23294 | 23792/23793/23794 | 19092/19093/19094 |
@@ -254,9 +257,9 @@ Lab probes, fixtures и credentials в JAR отсутствуют. Credential-pa
 
 | Версия | Основной каталог evidence |
 |---|---|
-| 4.4.0 | `F:\DEV\GitOps\kafka-lab\gitops-integration\run-20261113-105238-8aa17e` |
-| 3.7.1 | `F:\DEV\GitOps\kafka-lab-371\integration\run-20261113-105250-b34a5a` |
-| 3.2.3 | `F:\DEV\GitOps\kafka-lab-323\integration\run-20261113-110938-8e3f8d` |
+| 4.4.0 | `../kafka-lab\gitops-integration\run-20261113-105238-8aa17e` |
+| 3.7.1 | `../kafka-lab-371\integration\run-20261113-105250-b34a5a` |
+| 3.2.3 | `../kafka-lab-323\integration\run-20261113-110938-8e3f8d` |
 
 В каждом: manifest с command/exit code/status, YAML/JSON, metadata before/after, assignments,
 leader/ISR/UUID, Docker proofs, API audits, seed-records и offset checks. Write/final hashes

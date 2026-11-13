@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+> Historical stage evidence: the dates, versions, hashes and test outcomes below describe that stage and artifact. Personal machine paths were anonymized for publication. See [0.4.0 preparation](../release/v0.4.0-release-preparation.md) for the current release status.
+
 # Программа будущих интеграционных испытаний Kafka GitOps
 
 Статус: **ПОДГОТОВЛЕНО, НЕ ВЫПОЛНЕНО**. Дата: 12.11.2026.

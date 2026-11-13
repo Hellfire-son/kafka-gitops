@@ -1,3 +1,4 @@
+@rem Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md.
 @rem
 @rem Copyright 2015 the original author or authors.
 @rem

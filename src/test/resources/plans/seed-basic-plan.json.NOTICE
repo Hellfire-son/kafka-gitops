@@ -1,0 +1,8 @@
+SPDX-License-Identifier: Apache-2.0
+
+Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md.
+File: src/test/resources/plans/seed-basic-plan.json
+Changes: Updated fixtures/regressions for the independent fork; executable fixture contents retain their original format.
+
+Based on joschi/kafka-gitops 0.3.1, originally created by Shawn Seymour as devshawn/kafka-gitops.
+Original copyright and notices are retained. This adjacent notice preserves the machine-readable/binary fixture format.

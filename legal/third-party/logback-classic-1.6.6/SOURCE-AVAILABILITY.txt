@@ -1,0 +1,10 @@
+Logback 1.6.6 is redistributed under the Eclipse Public License 2.0.
+The original dual-license notice is retained in LICENSE.txt.
+
+Corresponding unmodified source is available under EPL-2.0 at:
+https://repo.maven.apache.org/maven2/ch/qos/logback/logback-classic/1.6.6/logback-classic-1.6.6-sources.jar
+SHA-256: e3a8a1a00701c54f0b23c2c1427c307e9481da6c0696a7abf3a38a77322288d0
+
+Upstream source tag: https://github.com/qos-ch/logback/tree/v_1.6.6
+Upstream source archive: https://github.com/qos-ch/logback/archive/refs/tags/v_1.6.6.tar.gz
+Source availability applies to Logback, not a relicensing of Kafka GitOps.

@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+# Proposed allowlist for stage 3; no ref/tag/commit/remote has been created here.
+
+Destination branch: refs/heads/main
+Source: reviewed final release-preparation commit from feature/ads-gitops.
+Destination tag: refs/tags/v0.4.0, only after separate authorization to create it,
+pointing to that same accepted release commit.
+
+Current local main is upstream 0.3.1, not the prepared release.
+The final commit ID and own-fork remote URL must be recorded during stage 3.
+Any optional historical tags need a separate explicit list and review.
+Historical refs retain historical workflow files: a push of an old tag can
+execute old publishing automation. Review GitHub settings before importing refs.
+
+Never publish refs/codex/**, refs/remotes/**, unrelated experimental branches,
+local logs/caches/private properties, or all refs/tags via a blanket command.
+No push --mirror / --all / --tags without separate approval.
+Existing upstream remotes are retained unchanged and are not publication targets.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package com.devshawn.kafka.gitops.config
 
 import ch.qos.logback.classic.Level

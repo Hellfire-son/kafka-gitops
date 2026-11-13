@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package com.devshawn.kafka.gitops
 
 import com.devshawn.kafka.gitops.domain.plan.*

@@ -1,3 +1,4 @@
+# Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md.
 .idea/
 *.iml
 .gradle/
@@ -7,3 +8,18 @@ docker/data/
 state.yaml
 plan.json
 test.py
+
+# Local machine settings and credentials; tracked demo/test properties stay visible.
+/gradle.properties
+/client.properties
+/command.properties
+/.env
+/.env.local
+/.env.*.local
+/.vscode/
+/bin/
+__pycache__/
+*.py[cod]
+*.log
+/integration-results/
+/secret-scan-results/

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # Verified Apache archive, packaged locally on a pinned Docker Official Java 17 base.
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}

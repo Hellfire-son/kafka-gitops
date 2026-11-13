@@ -1,3 +1,4 @@
+<!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
 
 # kafka-gitops
 
@@ -7,4 +8,4 @@
 - Manage topics, services, and ACLs with desired state files
 
 [Documentation](/documentation.md)
-[GitHub](https://github.com/joschi/kafka-gitops)
+[Upstream project](https://github.com/joschi/kafka-gitops)

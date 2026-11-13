@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+> Historical stage evidence: the dates, versions, hashes and test outcomes below describe that stage and artifact. Personal machine paths were anonymized for publication. See [0.4.0 preparation](../release/v0.4.0-release-preparation.md) for the current release status.
+
 # Stage 6B3C — безопасная интеграция RF apply
 
 Дата проверки: 2026-11-10. Ветка: `feature/ads-gitops`, исходный HEAD: `ec5a4bf`.
@@ -144,7 +147,7 @@ Launcher JVM — Temurin/Adoptium 21.0.13; существующий toolchain ve
 CI/DEBUG очищены для процесса сборки; `--offline --no-scan`, build scan не публиковался.
 
 ```powershell
-.\gradlew.bat --gradle-user-home C:\Users\hellf\.gradle --offline --no-daemon --no-scan --console plain --warning-mode all --init-script .gradle/ads-replication-stage6b3c/safe-unit.init.gradle --init-script .gradle/ads-kafka-upgrade-4c/inventory.init.gradle -PadsInventoryOutput=.gradle/ads-replication-stage6b3c/runtime-inventory.json clean classes testClasses test shadowJar buildExecutableJar buildRelease adsKafkaInventory
+.\gradlew.bat --gradle-user-home "$env:USERPROFILE\.gradle" --offline --no-daemon --no-scan --console plain --warning-mode all --init-script .gradle/ads-replication-stage6b3c/safe-unit.init.gradle --init-script .gradle/ads-kafka-upgrade-4c/inventory.init.gradle -PadsInventoryOutput=.gradle/ads-replication-stage6b3c/runtime-inventory.json clean classes testClasses test shadowJar buildExecutableJar buildRelease adsKafkaInventory
 ```
 
 `test` запускался только со строгим init allowlist из 31 unit Spec, с явным исключением

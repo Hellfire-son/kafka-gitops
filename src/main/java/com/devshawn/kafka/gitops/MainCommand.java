@@ -1,3 +1,4 @@
+// Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md.
 package com.devshawn.kafka.gitops;
 
 import com.devshawn.kafka.gitops.cli.AccountCommand;
@@ -14,7 +15,7 @@ import java.io.File;
 import java.util.concurrent.Callable;
 
 @Command(name = "kafka-gitops",
-        version = "0.3.1",
+        version = "0.4.0",
         exitCodeOnInvalidInput = 2,
         subcommands = {
                 AccountCommand.class,

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+> Historical stage evidence: the dates, versions, hashes and test outcomes below describe that stage and artifact. Personal machine paths were anonymized for publication. See [0.4.0 preparation](../release/v0.4.0-release-preparation.md) for the current release status.
+
 # Финальная техническая приёмка Kafka GitOps — Задание 3
 
 Дата: **12.11.2026**, Europe/Moscow. Ветка `feature/ads-gitops`.
@@ -266,7 +269,7 @@ JDK/OS/container и неизвестные native/shaded versions не объя�
 Окончательный код проверен командой:
 
 ```powershell
-.\gradlew.bat --gradle-user-home C:\Users\hellf\.gradle --offline --no-daemon --no-scan --console plain --warning-mode all clean classes testClasses test shadowJar buildExecutableJar buildRelease
+.\gradlew.bat --gradle-user-home "$env:USERPROFILE\.gradle" --offline --no-daemon --no-scan --console plain --warning-mode all clean classes testClasses test shadowJar buildExecutableJar buildRelease
 ```
 
 Основной прогон **BUILD SUCCESSFUL, 33 s, 9 executed tasks**; контрольный clean

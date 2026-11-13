@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Offline tests for separate legacy gates. No Docker/Kafka/filesystem mutations."""
 import copy, pathlib, subprocess, sys, unittest
 from unittest.mock import Mock, patch
@@ -62,13 +63,13 @@ class LegacyScopeTest(unittest.TestCase):
 
     def test_exact_desktop_mirror_and_windows_config_bind_are_allowed(self):
         lab.select_profile('323');name='broker-1.properties'
-        for source in [str((lab.LAB/'config'/name).resolve()),'/run/desktop/mnt/host/f/DEV/GitOps/kafka-lab-323/config/'+name]:
+        for source in lab.bind_source_paths(str((lab.LAB/'config'/name).resolve())):
             lab.verify_config_bind(dict(Source=source,Destination='/opt/lab/config/'+name,RW=False),name)
 
     def test_foreign_writable_or_misdirected_config_mount_is_refused(self):
         lab.select_profile('323');name='broker-1.properties'
-        binding=dict(Source='/run/desktop/mnt/host/f/DEV/GitOps/kafka-lab-323/config/'+name,Destination='/opt/lab/config/'+name,RW=False)
-        for change in [dict(Source='/run/desktop/mnt/host/f/DEV/GitOps/kafka-lab/config/'+name),dict(RW=True),dict(Destination='/tmp/config')]:
+        binding=dict(Source=str((lab.LAB/'config'/name).resolve()),Destination='/opt/lab/config/'+name,RW=False)
+        for change in [dict(Source='/different-lab/config/'+name),dict(RW=True),dict(Destination='/tmp/config')]:
             with self.assertRaises(AssertionError):lab.verify_config_bind(dict(binding,**change),name)
         with self.assertRaises(AssertionError):lab.verify_config_bind(binding,'../foreign.properties')
 

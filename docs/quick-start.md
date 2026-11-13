@@ -1,3 +1,4 @@
+<!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
 # Quick Start
 
 Getting started with `kafka-gitops` is simple. For this tutorial, we will assume:

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+> Historical stage evidence: the dates, versions, hashes and test outcomes below describe that stage and artifact. Personal machine paths were anonymized for publication. See [0.4.0 preparation](../release/v0.4.0-release-preparation.md) for the current release status.
+
 # Финальный аудит зависимостей Kafka GitOps после 4A, 4B и 4C
 
 Дата проверки: **09.11.2026**. Ветка `feature/ads-gitops`, HEAD `24d19e5ed22b5568875f2408a027465d8123b374`. До аудита рабочее дерево чистое. Основа — joschi/kafka-gitops 0.3.1 с исправлениями безопасного логирования и previousValue. Для сравнения прочитан [первоначальный отчёт Stage 3](audit-report-2026-11-09.md); его содержимое сохранено.

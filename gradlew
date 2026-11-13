@@ -1,4 +1,5 @@
 #!/bin/sh
+# Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md.
 
 #
 # Copyright © 2015 the original authors.

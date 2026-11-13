@@ -1,3 +1,4 @@
+// Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md.
 buildscript {
     dependencies {
         // Keep the stable plugins' separately resolved build libraries current too.
@@ -29,6 +30,7 @@ plugins {
 }
 
 group = 'com.devshawn'
+version = '0.4.0'
 
 application {
     mainClass = 'com.devshawn.kafka.gitops.MainCommand'
@@ -128,8 +130,12 @@ jacocoTestReport {
 }
 
 jar {
+    // The distributable runtime artifact is the single universal shadow JAR.
+    enabled = false
     manifest {
-        attributes('Main-Class': application.mainClass.get())
+        attributes('Main-Class': application.mainClass.get(),
+                'Implementation-Title': 'Kafka GitOps',
+                'Implementation-Version': project.version)
     }
 }
 
@@ -138,8 +144,32 @@ tasks.withType(AbstractArchiveTask).configureEach {
     reproducibleFileOrder = true
 }
 
+def prepareLegalBundle = tasks.register('prepareLegalBundle', Sync) {
+    from('legal/third-party') { into 'META-INF/licenses' }
+    from('legal/runtime-components.json') { into 'META-INF/licenses' }
+    from('LICENSE') {
+        into 'META-INF/licenses/kafka-gitops'
+        filter(org.apache.tools.ant.filters.FixCrLfFilter,
+                eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('lf'), fixlast: false)
+    }
+    from('CHANGES-FROM-UPSTREAM.md') {
+        into 'META-INF/licenses/kafka-gitops'
+        filter(org.apache.tools.ant.filters.FixCrLfFilter,
+                eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('lf'), fixlast: false)
+    }
+    from('legal/THIRD-PARTY-NOTICES') { into 'META-INF' }
+    from('legal/THIRD-PARTY-NOTICES') {
+        into 'META-INF'
+        rename { 'NOTICE' }
+    }
+    into layout.buildDirectory.dir('generated/release-legal')
+}
+
 shadowJar {
     archiveFileName = 'kafka-gitops-all.jar'
+    from prepareLegalBundle
+    // Original legal resources are also preserved under unique component paths.
+    // EXCLUDE affects legacy shared paths, never the component-specific bundle.
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     filesMatching('META-INF/services/**') {
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
@@ -148,8 +178,99 @@ shadowJar {
     failOnDuplicateEntries = true
     exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA'
     exclude 'module-info.class', 'META-INF/versions/**/module-info.class'
-    manifest.attributes('Multi-Release': 'true')
+    manifest.attributes('Multi-Release': 'true',
+            'Main-Class': application.mainClass.get(),
+            'Implementation-Title': 'Kafka GitOps',
+            'Implementation-Version': project.version)
 }
+
+def reviewedLegalFile = file('legal/runtime-components.json')
+def reviewedProjectLicense = file('LICENSE')
+def reviewedCombinedNotice = file('legal/THIRD-PARTY-NOTICES')
+def reviewedRuntime = configurations.runtimeClasspath
+def releaseArtifactFile = tasks.named('shadowJar').flatMap { it.archiveFile }
+def releaseIdentity = project.version.toString()
+def releaseMainClass = application.mainClass
+
+tasks.register('verifyReleaseArtifact') {
+    group = 'verification'
+    description = 'Verify legal texts, runtime provenance, services, JNI and Java 21 packaging.'
+    notCompatibleWithConfigurationCache('Read-only verification of resolved runtime artifacts and their ZIP entries')
+    dependsOn tasks.named('shadowJar')
+    inputs.file tasks.named('shadowJar').flatMap { it.archiveFile }
+    inputs.files fileTree('legal'), file('LICENSE')
+    doLast {
+        def hash = { byte[] b -> java.security.MessageDigest.getInstance('SHA-256').digest(b).encodeHex().toString() }
+        def legal = new groovy.json.JsonSlurper().parse(reviewedLegalFile)
+        def artifacts = reviewedRuntime.resolvedConfiguration.resolvedArtifacts
+        def coords = artifacts.collect { "${it.moduleVersion.id.group}:${it.name}:${it.moduleVersion.id.version}" }.sort()
+        assert coords == legal.components.collect { it.coordinate }.sort(): 'Runtime graph differs from reviewed legal manifest'
+        def path = releaseArtifactFile.get().asFile
+        new java.util.jar.JarFile(path).withCloseable { jarFile ->
+            def names = jarFile.entries().collect { it.name }
+            assert names.size() == names.toSet().size(): 'Duplicate ZIP entries'
+            def bytes = { String name ->
+                def entry = jarFile.getJarEntry(name)
+                assert entry != null: "Missing release resource: ${name}"
+                jarFile.getInputStream(entry).withCloseable { it.bytes }
+            }
+            legal.components.each { component ->
+                def artifact = artifacts.find { "${it.moduleVersion.id.group}:${it.name}:${it.moduleVersion.id.version}" == component.coordinate }
+                assert hash(artifact.file.bytes) == component.jarSha256: "Unreviewed runtime bytes: ${component.coordinate}"
+                component.files.each { name, expected ->
+                    assert hash(bytes("META-INF/licenses/${component.directory}/${name}")) == expected: "Changed legal text: ${component.directory}/${name}"
+                }
+                new java.util.zip.ZipFile(artifact.file).withCloseable { dependency ->
+                    dependency.entries().each { entry ->
+                        if (!entry.directory && !entry.name.endsWith('.class') &&
+                                entry.name.toLowerCase(Locale.ROOT) =~ /license|notice|copying|copyright|(?:^|\/)about\.html$/) {
+                            def original = dependency.getInputStream(entry).withCloseable { it.bytes }
+                            assert hash(bytes("META-INF/licenses/${component.directory}/upstream-jar/${entry.name}")) == hash(original): "Lost upstream legal resource: ${component.coordinate}/${entry.name}"
+                        }
+                        if (!entry.directory && entry.name ==~ /.*\.(so|dll|dylib|jnilib)/) {
+                            def original = dependency.getInputStream(entry).withCloseable { it.bytes }
+                            assert hash(bytes(entry.name)) == hash(original): "Changed JNI resource: ${entry.name}"
+                        }
+                    }
+                }
+            }
+            assert hash(bytes('META-INF/licenses/kafka-gitops/LICENSE')) == hash(reviewedProjectLicense.getText('UTF-8').replace('\r\n', '\n').getBytes('UTF-8'))
+            assert hash(bytes('META-INF/THIRD-PARTY-NOTICES')) == hash(reviewedCombinedNotice.bytes)
+            assert hash(bytes('META-INF/NOTICE')) == hash(reviewedCombinedNotice.bytes)
+            def manifest = jarFile.manifest.mainAttributes
+            assert manifest.getValue('Main-Class') == releaseMainClass.get()
+            assert manifest.getValue('Implementation-Version') == releaseIdentity
+            assert manifest.getValue('Multi-Release') == 'true'
+            assert manifest.getValue('Class-Path') == null
+            def kafka = new Properties()
+            kafka.load(new ByteArrayInputStream(bytes('kafka/kafka-version.properties')))
+            assert kafka.getProperty('version') == '4.4.0'
+            def serviceFiles = names.findAll { it.startsWith('META-INF/services/') && !it.endsWith('/') }
+            assert serviceFiles.size() == 5
+            serviceFiles.each { name ->
+                new String(bytes(name), 'UTF-8').readLines().each { line ->
+                    def provider = line.split('#', 2)[0].trim()
+                    if (provider) assert names.contains(provider.replace('.', '/') + '.class'): "Missing service provider ${provider}"
+                }
+            }
+            def nativeFiles = names.findAll { it ==~ /.*\.(so|dll|dylib|jnilib)/ }
+            assert nativeFiles.size() == 53
+            def effectiveMajors = names.findAll { it.endsWith('.class') }.findResults { name ->
+                def mr = name =~ /^META-INF\/versions\/(\d+)\//
+                if (mr.find() && mr.group(1).toInteger() > 21) return null
+                def b = bytes(name)
+                ((b[6] & 255) << 8) | (b[7] & 255)
+            }
+            assert effectiveMajors.max() == 65: 'Unexpected effective bytecode level on Java 21'
+            assert !names.any { it.endsWith('module-info.class') || it ==~ /META-INF\/[^\/]+\.(SF|RSA|DSA)/ }
+            assert !names.any { it.contains('QaProcessProbe') || it.contains('KafkaLabProbe') || it.contains('Kafka3xLabProbe') || it.endsWith('/client.properties') }
+            logger.lifecycle("Verified ${legal.components.size()} runtime components, ${serviceFiles.size()} service descriptors and ${nativeFiles.size()} JNI resources; legal bytes preserved.")
+        }
+    }
+}
+
+tasks.named('check') { dependsOn tasks.named('verifyReleaseArtifact') }
+tasks.named('assemble') { dependsOn tasks.named('shadowJar') }
 
 // Concatenate the existing POSIX launcher without requiring a shell on Windows.
 abstract class BuildExecutableJar extends DefaultTask {
@@ -173,6 +294,7 @@ abstract class BuildExecutableJar extends DefaultTask {
 }
 
 tasks.register('buildExecutableJar', BuildExecutableJar) {
+    dependsOn tasks.named('verifyReleaseArtifact')
     launcher = layout.projectDirectory.file('stub.sh')
     jarFile = tasks.named('shadowJar').flatMap { it.archiveFile }
     outputFile = layout.buildDirectory.file('output/kafka-gitops')
@@ -180,16 +302,35 @@ tasks.register('buildExecutableJar', BuildExecutableJar) {
 
 tasks.register('buildRelease', Zip) {
     group = 'build'
+    archiveFileName = "kafka-gitops-${project.version}.zip"
     from(tasks.named('buildExecutableJar').flatMap { it.outputFile }) {
         filePermissions { unix('rwxr-xr-x') }
     }
+    from(prepareLegalBundle) { into 'legal' }
+    from('LICENSE') {
+        filter(org.apache.tools.ant.filters.FixCrLfFilter,
+                eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('lf'), fixlast: false)
+    }
+    from 'legal/THIRD-PARTY-NOTICES'
+    from('docs/release/v0.4.0-release-notes.md') {
+        rename { 'RELEASE-NOTES.md' }
+        filter(org.apache.tools.ant.filters.FixCrLfFilter,
+                eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('lf'), fixlast: false)
+    }
 }
 
+// Retire the generated thin/shadow distributions: the custom verified ZIP is
+// the sole release distribution, and no launcher may reference a disabled plain JAR.
+tasks.matching { it.name in ['startScripts', 'distZip', 'distTar', 'installDist',
+        'startShadowScripts', 'shadowDistZip', 'shadowDistTar', 'installShadowDist'] }.configureEach {
+    enabled = false
+}
+tasks.named('assemble') { dependsOn tasks.named('buildRelease') }
+
 sonar {
-    skipProject = providers.environmentVariable("SONAR_TOKEN").getOrElse("").isBlank()
+    // External analysis is disabled unless a maintainer explicitly opts in.
+    skipProject = !providers.gradleProperty('enableSonar').map { it == 'true' }.getOrElse(false)
     properties {
-        property "sonar.projectKey", "joschi_kafka-gitops"
-        property "sonar.organization", "joschi"
         property "sonar.host.url", "https://sonarcloud.io"
     }
 }

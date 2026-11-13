@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+> Historical stage evidence: the dates, versions, hashes and test outcomes below describe that stage and artifact. Personal machine paths were anonymized for publication. See [0.4.0 preparation](../release/v0.4.0-release-preparation.md) for the current release status.
+
 # Kafka 4.4.0: испытания на локальном Docker-стенде
 
 Дата: **12.11.2026** (Europe/Moscow). Ветка `feature/ads-gitops`.
@@ -40,7 +43,7 @@ RF02/RF03 не выполнялись из-за недостигнутых prere
 |---|---|
 | Docker context / endpoint | `desktop-linux`, Docker Desktop Linux named pipe |
 | Desktop / Engine / Compose | **4.99.0 (245822) / 29.9.3 / 5.7.0** |
-| Compose project / source | `kafka-gitops-lab`, `F:\DEV\GitOps\kafka-lab\compose.yaml` |
+| Compose project / source | `kafka-gitops-lab`, `../kafka-lab\compose.yaml` |
 | Image | `apache/kafka:4.4.0`, одинаковый image ID у всех трёх контейнеров |
 | Container `Image` field | `sha256:833b867a9585a141da455dc2b57431c65cbccb27f11c91f694444cca9f777e0f` у всех трёх |
 | Compose image label | `sha256:76af3d0116abbb33b4cd964af410d4921c33d1f663e7a95d5453a9c35a84869b`; это отдельное поле, не container Image ID |
@@ -73,13 +76,13 @@ Compose/volumes не редактировались. Docker down/stop/restart и
 
 ## Каталог evidence и конфигурация
 
-Корень: `F:\DEV\GitOps\kafka-lab\gitops-integration`.
-Run: `F:\DEV\GitOps\kafka-lab\gitops-integration\run-20261112-180451-668a0e`.
+Корень: `../kafka-lab\gitops-integration`.
+Run: `../kafka-lab\gitops-integration\run-20261112-180451-668a0e`.
 
 В каталоге сохранены YAML, JSON plans, `<id>.log`, `<id>-command.json` с точным argv,
 exit code и duration, `*-metadata.json`, `*-docker-proof.json`, Admin audit JSON,
 `manifest.json`, `summary.json`, container version/ps и неисполненные cleanup-команды.
-[Manifest](F:/DEV/GitOps/kafka-lab/gitops-integration/run-20261112-180451-668a0e/manifest.json)
+[Manifest](../kafka-lab/gitops-integration/run-20261112-180451-668a0e/manifest.json)
 содержит полный protocol, expected/actual и вложенные before/after snapshots.
 Краткие состояния ниже дополняются этими полными metadata, а не заменяют их.
 
@@ -104,8 +107,8 @@ timeout 1000 ms / request timeout 500 ms и **только plan**; этот фа
 В таблицах `$repo`, `$root`, `$run`, `$cfg`, `$jar` обозначают эти точные paths:
 
 ```powershell
-$repo = 'F:\DEV\GitOps\kafka-gitops'
-$root = 'F:\DEV\GitOps\kafka-lab\gitops-integration'
+$repo = '.'
+$root = '../kafka-lab\gitops-integration'
 $run = "$root\run-20261112-180451-668a0e"
 $cfg = "$root\client.properties"
 $jar = "$repo\build\libs\kafka-gitops-all.jar"
@@ -288,7 +291,7 @@ reflection; он заменён непосредственным protocol writer
 Выполнено после live испытаний:
 
 ```powershell
-.\gradlew.bat --gradle-user-home C:\Users\hellf\.gradle --offline --no-daemon --no-scan --console plain --warning-mode all --rerun-tasks classes testClasses test shadowJar buildExecutableJar buildRelease
+.\gradlew.bat --gradle-user-home "$env:USERPROFILE\.gradle" --offline --no-daemon --no-scan --console plain --warning-mode all --rerun-tasks classes testClasses test shadowJar buildExecutableJar buildRelease
 python tools/integration/test_kafka44_lab.py
 python .gradle/kafka44-integration/verify.py
 ```
@@ -329,7 +332,7 @@ python tools/integration/kafka44_lab.py --phase verify --run-dir $run
 Режим rf в этом runner фиксирует ожидаемую блокировку **данного ELR-enabled
 стенда**. Он не является универсальным positive-RF runner для другого feature mode.
 Нет автоматического cleanup. Отдельные scoped команды для четырёх точных имён
-сохранены в [cleanup-NOT-EXECUTED.txt](F:/DEV/GitOps/kafka-lab/gitops-integration/run-20261112-180451-668a0e/cleanup-NOT-EXECUTED.txt).
+сохранены в [cleanup-NOT-EXECUTED.txt](../kafka-lab/gitops-integration/run-20261112-180451-668a0e/cleanup-NOT-EXECUTED.txt).
 Они **не выполнялись**. Перед каждой отдельной разрешённой delete-командой надо
 выполнить `--phase verify`, проверить UUID/name/identity и получить разрешение
 владельца на удаление именно этого test topic. Никаких wildcard/global delete,

@@ -1,0 +1,280 @@
+Original source-header notices. Extracted without changing the comment texts.
+
+Files: jni/jni.h, jni/jni_md.h
+/*
+ * Copyright (c) 1996, 2013, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
+
+Files: src/main/native/common/allocations.h, src/main/native/common/bits.h, src/main/native/common/compiler.h, src/main/native/common/cpu.h, src/main/native/common/error_private.c, src/main/native/common/error_private.h, src/main/native/common/mem.h, src/main/native/common/pool.c, src/main/native/common/pool.h, src/main/native/common/portability_macros.h, src/main/native/common/zstd_common.c, src/main/native/common/zstd_deps.h, src/main/native/common/zstd_internal.h, src/main/native/common/zstd_trace.h, src/main/native/compress/clevels.h, src/main/native/compress/zstd_compress.c, src/main/native/compress/zstd_compress_internal.h, src/main/native/compress/zstd_compress_literals.c, src/main/native/compress/zstd_compress_literals.h, src/main/native/compress/zstd_compress_sequences.c, src/main/native/compress/zstd_compress_sequences.h, src/main/native/compress/zstd_compress_superblock.c, src/main/native/compress/zstd_compress_superblock.h, src/main/native/compress/zstd_cwksp.h, src/main/native/compress/zstd_double_fast.c, src/main/native/compress/zstd_double_fast.h, src/main/native/compress/zstd_fast.c, src/main/native/compress/zstd_fast.h, src/main/native/compress/zstd_lazy.c, src/main/native/compress/zstd_lazy.h, src/main/native/compress/zstd_ldm.c, src/main/native/compress/zstd_ldm.h, src/main/native/compress/zstd_ldm_geartab.h, src/main/native/compress/zstd_opt.c, src/main/native/compress/zstd_opt.h, src/main/native/compress/zstd_preSplit.c, src/main/native/compress/zstd_preSplit.h, src/main/native/compress/zstdmt_compress.c, src/main/native/compress/zstdmt_compress.h, src/main/native/decompress/huf_decompress_amd64.S, src/main/native/decompress/zstd_ddict.c, src/main/native/decompress/zstd_ddict.h, src/main/native/decompress/zstd_decompress.c, src/main/native/decompress/zstd_decompress_block.c, src/main/native/decompress/zstd_decompress_block.h, src/main/native/decompress/zstd_decompress_internal.h, src/main/native/dictBuilder/cover.c, src/main/native/dictBuilder/cover.h, src/main/native/dictBuilder/fastcover.c, src/main/native/dictBuilder/zdict.c, src/main/native/zdict.h, src/main/native/zstd.h, src/main/native/zstd_errors.h
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * All rights reserved.
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+ */
+
+Files: src/main/native/common/bitstream.h
+/* ******************************************************************
+ * bitstream
+ * Part of FSE library
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * You can contact the author at :
+ * - Source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+Files: src/main/native/common/debug.c, src/main/native/common/debug.h
+/* ******************************************************************
+ * debug
+ * Part of FSE library
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * You can contact the author at :
+ * - Source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+Files: src/main/native/common/entropy_common.c
+/* ******************************************************************
+ * Common functions of New Generation Entropy library
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ *  You can contact the author at :
+ *  - FSE+HUF source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *  - Public forum : https://groups.google.com/forum/#!forum/lz4c
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+Files: src/main/native/common/fse.h
+/* ******************************************************************
+ * FSE : Finite State Entropy codec
+ * Public Prototypes declaration
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * You can contact the author at :
+ * - Source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+Files: src/main/native/common/fse_decompress.c
+/* ******************************************************************
+ * FSE : Finite State Entropy decoder
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ *  You can contact the author at :
+ *  - FSE source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *  - Public forum : https://groups.google.com/forum/#!forum/lz4c
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+Files: src/main/native/common/huf.h
+/* ******************************************************************
+ * huff0 huffman codec,
+ * part of Finite State Entropy library
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * You can contact the author at :
+ * - Source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+Files: src/main/native/common/threading.c, src/main/native/common/threading.h
+/**
+ * Copyright (c) 2016 Tino Reichardt
+ * All rights reserved.
+ *
+ * You can contact the author at:
+ * - zstdmt source repository: https://github.com/mcmilk/zstdmt
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+ */
+
+Files: src/main/native/common/xxhash.c
+/*
+ * xxHash - Extremely Fast Hash algorithm
+ * Copyright (c) Yann Collet - Meta Platforms, Inc
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+ */
+
+Files: src/main/native/common/xxhash.h
+/*
+ * xxHash - Extremely Fast Hash algorithm
+ * Header File
+ * Copyright (c) Yann Collet - Meta Platforms, Inc
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+ */
+
+Files: src/main/native/compress/fse_compress.c
+/* ******************************************************************
+ * FSE : Finite State Entropy encoder
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ *  You can contact the author at :
+ *  - FSE source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *  - Public forum : https://groups.google.com/forum/#!forum/lz4c
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+Files: src/main/native/compress/hist.c, src/main/native/compress/hist.h
+/* ******************************************************************
+ * hist : Histogram functions
+ * part of Finite State Entropy project
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ *  You can contact the author at :
+ *  - FSE source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *  - Public forum : https://groups.google.com/forum/#!forum/lz4c
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+Files: src/main/native/compress/huf_compress.c
+/* ******************************************************************
+ * Huffman encoder, part of New Generation Entropy library
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ *  You can contact the author at :
+ *  - FSE+HUF source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *  - Public forum : https://groups.google.com/forum/#!forum/lz4c
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+Files: src/main/native/decompress/huf_decompress.c
+/* ******************************************************************
+ * huff0 huffman decoder,
+ * part of Finite State Entropy library
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ *  You can contact the author at :
+ *  - FSE+HUF source repository : https://github.com/Cyan4973/FiniteStateEntropy
+ *
+ * This source code is licensed under both the BSD-style license (found in the
+ * LICENSE file in the root directory of this source tree) and the GPLv2 (found
+ * in the COPYING file in the root directory of this source tree).
+ * You may select, at your option, one of the above-listed licenses.
+****************************************************************** */
+
+Files: src/main/native/dictBuilder/divsufsort.c
+/*
+ * divsufsort.c for libdivsufsort-lite
+ * Copyright (c) 2003-2008 Yuta Mori All Rights Reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+Files: src/main/native/dictBuilder/divsufsort.h
+/*
+ * divsufsort.h for libdivsufsort-lite
+ * Copyright (c) 2003-2008 Yuta Mori All Rights Reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */

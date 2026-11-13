@@ -1,0 +1,84 @@
+Kafka GitOps 0.4.0 third-party notices
+
+Independent community-maintained fork of joschi/kafka-gitops 0.3.1,
+originally created by Shawn Seymour as devshawn/kafka-gitops.
+Copyright 2020 Shawn Seymour. Project license: Apache License 2.0.
+Modified files and changes are documented in CHANGES-FROM-UPSTREAM.md.
+
+The component licenses below remain applicable to their respective code.
+This distribution is not licensed solely under Apache-2.0.
+Full texts and original JAR notices are under META-INF/licenses/<component>/.
+Runtime component/source checksums are in META-INF/licenses/runtime-components.json.
+
+at.yawk.lz4:lz4-java:1.14.0
+License selection: Apache-2.0 (Java/JNI binding); BSD-2-Clause (LZ4 library)
+Source: https://repo.maven.apache.org/maven2/at/yawk/lz4/lz4-java/1.14.0/lz4-java-1.14.0-sources.jar
+Legal directory: META-INF/licenses/lz4-java-1.14.0/
+Native provenance: LZ4 submodule c72c7c0ec132ad2ce2fe9fad7b0c728d9faee2fc from v1.14.0 src tree
+
+ch.qos.logback:logback-classic:1.6.6
+License selection: EPL-2.0 (chosen from EPL-2.0 OR LGPL-2.1-only)
+Source: https://repo.maven.apache.org/maven2/ch/qos/logback/logback-classic/1.6.6/logback-classic-1.6.6-sources.jar
+Legal directory: META-INF/licenses/logback-classic-1.6.6/
+
+ch.qos.logback:logback-core:1.6.6
+License selection: EPL-2.0 (chosen from EPL-2.0 OR LGPL-2.1-only)
+Source: https://repo.maven.apache.org/maven2/ch/qos/logback/logback-core/1.6.6/logback-core-1.6.6-sources.jar
+Legal directory: META-INF/licenses/logback-core-1.6.6/
+
+com.fasterxml.jackson.core:jackson-annotations:2.23
+License selection: Apache-2.0; bundled third-party licenses retained where present
+Source: https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.23/jackson-annotations-2.23-sources.jar
+Legal directory: META-INF/licenses/jackson-annotations-2.23/
+
+com.github.luben:zstd-jni:1.5.7-26
+License selection: BSD-2-Clause (JNI binding); BSD-3-Clause (Zstandard, selected from BSD-3-Clause OR GPL-2.0)
+Source: https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.7-26/zstd-jni-1.5.7-26-sources.jar
+Legal directory: META-INF/licenses/zstd-jni-1.5.7-26/
+
+info.picocli:picocli:4.7.7
+License selection: Apache-2.0
+Source: https://repo.maven.apache.org/maven2/info/picocli/picocli/4.7.7/picocli-4.7.7-sources.jar
+Legal directory: META-INF/licenses/picocli-4.7.7/
+
+org.apache.kafka:kafka-clients:4.4.0
+License selection: Apache-2.0; bundled third-party licenses retained where present
+Source: https://repo.maven.apache.org/maven2/org/apache/kafka/kafka-clients/4.4.0/kafka-clients-4.4.0-sources.jar
+Legal directory: META-INF/licenses/kafka-clients-4.4.0/
+
+org.slf4j:slf4j-api:2.0.20
+License selection: MIT
+Source: https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/2.0.20/slf4j-api-2.0.20-sources.jar
+Legal directory: META-INF/licenses/slf4j-api-2.0.20/
+
+org.snakeyaml:snakeyaml-engine:3.2
+License selection: Apache-2.0
+Source: https://repo.maven.apache.org/maven2/org/snakeyaml/snakeyaml-engine/3.2/snakeyaml-engine-3.2-sources.jar
+Legal directory: META-INF/licenses/snakeyaml-engine-3.2/
+
+org.xerial.snappy:snappy-java:1.1.10.12
+License selection: Apache-2.0 (binding/Hadoop); BSD-3-Clause (Snappy); MIT (Bitshuffle); additional native notices retained
+Source: https://repo.maven.apache.org/maven2/org/xerial/snappy/snappy-java/1.1.10.12/snappy-java-1.1.10.12-sources.jar
+Legal directory: META-INF/licenses/snappy-java-1.1.10.12/
+Native provenance: SNAPPY_VERSION=1.1.10; BITSHUFFLE_VERSION=0.3.4, from the exact binding source VERSION file
+
+tools.jackson.core:jackson-core:3.3.0
+License selection: Apache-2.0; bundled third-party licenses retained where present
+Source: https://repo.maven.apache.org/maven2/tools/jackson/core/jackson-core/3.3.0/jackson-core-3.3.0-sources.jar
+Legal directory: META-INF/licenses/jackson-core-3.3.0/
+
+tools.jackson.core:jackson-databind:3.3.0
+License selection: Apache-2.0; bundled third-party licenses retained where present
+Source: https://repo.maven.apache.org/maven2/tools/jackson/core/jackson-databind/3.3.0/jackson-databind-3.3.0-sources.jar
+Legal directory: META-INF/licenses/jackson-databind-3.3.0/
+
+tools.jackson.dataformat:jackson-dataformat-yaml:3.3.0
+License selection: Apache-2.0; bundled third-party licenses retained where present
+Source: https://repo.maven.apache.org/maven2/tools/jackson/dataformat/jackson-dataformat-yaml/3.3.0/jackson-dataformat-yaml-3.3.0-sources.jar
+Legal directory: META-INF/licenses/jackson-dataformat-yaml-3.3.0/
+
+Logback is redistributed under EPL-2.0; see each Logback SOURCE-AVAILABILITY.txt.
+Zstandard is redistributed under its BSD option; upstream GPL alternative text is retained for provenance.
+Native compiler runtime license texts/exception are supplied separately and do not relicense the bindings.
+Source-header credits are retained conservatively; they do not assert that every source file is shipped as bytecode.
+No endorsement or official support by ASF, Arenadata, Confluent or upstream maintainers is claimed.

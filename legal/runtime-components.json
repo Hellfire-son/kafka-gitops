@@ -1,0 +1,372 @@
+{
+  "schemaVersion": 1,
+  "components": [
+    {
+      "coordinate": "at.yawk.lz4:lz4-java:1.14.0",
+      "directory": "lz4-java-1.14.0",
+      "jarSha256": "e7d51c6ab599f88953f8f45b000da8f920eaba69fd5f24244431e0bca5b2f03b",
+      "jarUrl": "https://repo.maven.apache.org/maven2/at/yawk/lz4/lz4-java/1.14.0/lz4-java-1.14.0.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/at/yawk/lz4/lz4-java/1.14.0/lz4-java-1.14.0-sources.jar",
+      "sourcesSha256": "781976ab7cb56c6f7bbceb2a19462242dcbb57d96fa1ce7658107d6430b98e3f",
+      "additionalSources": [
+        {
+          "file": "lz4-source.tar.gz",
+          "url": "https://codeload.github.com/yawkat/lz4-java/tar.gz/refs/tags/v1.14.0",
+          "finalUrl": "https://codeload.github.com/yawkat/lz4-java/tar.gz/refs/tags/v1.14.0",
+          "sha256": "4a4d7b0fbbe437271d1b08427ec6f85a89586729cfddbb29faff994f42c2cb3d",
+          "size": 573951,
+          "status": "OK"
+        },
+        {
+          "file": "lz4-native.tar.gz",
+          "url": "https://codeload.github.com/lz4/lz4/tar.gz/c72c7c0ec132ad2ce2fe9fad7b0c728d9faee2fc",
+          "finalUrl": "https://codeload.github.com/lz4/lz4/tar.gz/c72c7c0ec132ad2ce2fe9fad7b0c728d9faee2fc",
+          "sha256": "275b9ccc5bccea640c0c7c352388ac25ae3ba39e350caf0a22cbcaff05380cfe",
+          "size": 546083,
+          "status": "OK"
+        },
+        {
+          "file": "GCC-RUNTIME-EXCEPTION-3.1.txt",
+          "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING.RUNTIME",
+          "finalUrl": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING.RUNTIME",
+          "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+          "size": 3324,
+          "status": "OK"
+        },
+        {
+          "file": "GPL-3.0.txt",
+          "url": "https://www.gnu.org/licenses/gpl-3.0.txt",
+          "finalUrl": "https://www.gnu.org/licenses/gpl-3.0.txt",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "size": 35149,
+          "status": "OK"
+        }
+      ],
+      "license": "Apache-2.0 (Java/JNI binding); BSD-2-Clause (LZ4 library)",
+      "nativeSource": "LZ4 submodule c72c7c0ec132ad2ce2fe9fad7b0c728d9faee2fc from v1.14.0 src tree",
+      "files": {
+        "compiler-runtime/GCC-RUNTIME-EXCEPTION-3.1.txt": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+        "compiler-runtime/GPL-3.0.txt": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "compiler-runtime/README.txt": "62bf96e41db6f5c781b02db9d82566bbc3246e8c98eee549abbb2a63ca9d7514",
+        "SOURCE-HEADERS.txt": "0916c57fb41e03f96c290cb13922b5b06bed72e3af455721f1a53415f0cf7d88",
+        "upstream-source/lib/LICENSE": "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c",
+        "upstream-source/LICENSE": "4bc9c403f6b679cc076dee210e0e21c27b4e8f6d3fb43d85364c76657bfaaac5",
+        "upstream-source/LICENSE.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    },
+    {
+      "coordinate": "ch.qos.logback:logback-classic:1.6.6",
+      "directory": "logback-classic-1.6.6",
+      "jarSha256": "5230217ccba7a9d31dda1dd878e5606037a7972282c7d3f8eac1efa80e9463d9",
+      "jarUrl": "https://repo.maven.apache.org/maven2/ch/qos/logback/logback-classic/1.6.6/logback-classic-1.6.6.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/ch/qos/logback/logback-classic/1.6.6/logback-classic-1.6.6-sources.jar",
+      "sourcesSha256": "e3a8a1a00701c54f0b23c2c1427c307e9481da6c0696a7abf3a38a77322288d0",
+      "additionalSources": [
+        {
+          "file": "logback-LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/qos-ch/logback/v_1.6.6/LICENSE.txt",
+          "finalUrl": "https://raw.githubusercontent.com/qos-ch/logback/v_1.6.6/LICENSE.txt",
+          "sha256": "f1eedf4f2cb9e901d6ae549a06d0c20dcde0136d37e38b50adaf51d4673f66d2",
+          "size": 471,
+          "status": "OK"
+        },
+        {
+          "file": "EPL-2.0.txt",
+          "url": "https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.txt",
+          "finalUrl": "https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.txt",
+          "sha256": "0becf16567beb77fa252b7664631dd177c8f9a1889e48995b45379c7130e5303",
+          "size": 14198,
+          "status": "OK"
+        }
+      ],
+      "license": "EPL-2.0 (chosen from EPL-2.0 OR LGPL-2.1-only)",
+      "files": {
+        "EPL-2.0.txt": "0becf16567beb77fa252b7664631dd177c8f9a1889e48995b45379c7130e5303",
+        "LICENSE.txt": "f1eedf4f2cb9e901d6ae549a06d0c20dcde0136d37e38b50adaf51d4673f66d2",
+        "SOURCE-AVAILABILITY.txt": "ced3d77cc9387e73951d03960347924f130da7c2b97b52c791e36caeb68d2a66",
+        "SOURCE-HEADERS.txt": "501d635edbec79c1ab081f4427cfd05f3124540a77ef11c4ac6543b733d90c91"
+      }
+    },
+    {
+      "coordinate": "ch.qos.logback:logback-core:1.6.6",
+      "directory": "logback-core-1.6.6",
+      "jarSha256": "5458415d5d58a97ab670632f9b2bdac2d6f7e0e11455b45dd4e64e90d12670ab",
+      "jarUrl": "https://repo.maven.apache.org/maven2/ch/qos/logback/logback-core/1.6.6/logback-core-1.6.6.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/ch/qos/logback/logback-core/1.6.6/logback-core-1.6.6-sources.jar",
+      "sourcesSha256": "2da2e76aa79f98770ffba58311b495e0e710b8bc6f46504249d039262668fe96",
+      "additionalSources": [
+        {
+          "file": "logback-LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/qos-ch/logback/v_1.6.6/LICENSE.txt",
+          "finalUrl": "https://raw.githubusercontent.com/qos-ch/logback/v_1.6.6/LICENSE.txt",
+          "sha256": "f1eedf4f2cb9e901d6ae549a06d0c20dcde0136d37e38b50adaf51d4673f66d2",
+          "size": 471,
+          "status": "OK"
+        },
+        {
+          "file": "EPL-2.0.txt",
+          "url": "https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.txt",
+          "finalUrl": "https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.txt",
+          "sha256": "0becf16567beb77fa252b7664631dd177c8f9a1889e48995b45379c7130e5303",
+          "size": 14198,
+          "status": "OK"
+        }
+      ],
+      "license": "EPL-2.0 (chosen from EPL-2.0 OR LGPL-2.1-only)",
+      "files": {
+        "EPL-2.0.txt": "0becf16567beb77fa252b7664631dd177c8f9a1889e48995b45379c7130e5303",
+        "LICENSE.txt": "f1eedf4f2cb9e901d6ae549a06d0c20dcde0136d37e38b50adaf51d4673f66d2",
+        "SOURCE-AVAILABILITY.txt": "48ab759e60ae5c13abf914a4bc8a500d7d911d551fc3d0d74ea52f6ada85c755",
+        "SOURCE-HEADERS.txt": "621ddc856fea07b4d93258f5f5f1c6d2385335b224bafe8a3c8a0a6f0ccc2f4f"
+      }
+    },
+    {
+      "coordinate": "com.fasterxml.jackson.core:jackson-annotations:2.23",
+      "directory": "jackson-annotations-2.23",
+      "jarSha256": "e5b60c3088e0887b290ff9226394354589a1dad583743944b7f5538661056b4c",
+      "jarUrl": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.23/jackson-annotations-2.23.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.23/jackson-annotations-2.23-sources.jar",
+      "sourcesSha256": "1d68d572e75ff7696db44545c48383593183600570c800f77660cb4775ce80fd",
+      "additionalSources": [],
+      "license": "Apache-2.0; bundled third-party licenses retained where present",
+      "files": {
+        "upstream-jar/META-INF/LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "upstream-jar/META-INF/NOTICE": "612b14bc77c944ce229cbba0d14919162cfea8ed802cbf06a8e865e032d03201"
+      }
+    },
+    {
+      "coordinate": "com.github.luben:zstd-jni:1.5.7-26",
+      "directory": "zstd-jni-1.5.7-26",
+      "jarSha256": "2d03193dd02c4495be80b4aad571b78a9a21dd6e2cfeb63ae57451c53a9cd074",
+      "jarUrl": "https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.7-26/zstd-jni-1.5.7-26.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.7-26/zstd-jni-1.5.7-26-sources.jar",
+      "sourcesSha256": "330cca7dbade9580ba1ed8dea99931ca3a82ea57249b45d75b60bb896f309e67",
+      "additionalSources": [
+        {
+          "file": "zstd-source.tar.gz",
+          "url": "https://codeload.github.com/luben/zstd-jni/tar.gz/refs/tags/v1.5.7-26",
+          "finalUrl": "https://codeload.github.com/luben/zstd-jni/tar.gz/refs/tags/v1.5.7-26",
+          "sha256": "970d6675826ab3035742620f742a10ac9957fbe1ccf8c7214b4d0ae589699b99",
+          "size": 10577566,
+          "status": "OK"
+        },
+        {
+          "file": "GCC-RUNTIME-EXCEPTION-3.1.txt",
+          "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING.RUNTIME",
+          "finalUrl": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING.RUNTIME",
+          "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+          "size": 3324,
+          "status": "OK"
+        },
+        {
+          "file": "GPL-3.0.txt",
+          "url": "https://www.gnu.org/licenses/gpl-3.0.txt",
+          "finalUrl": "https://www.gnu.org/licenses/gpl-3.0.txt",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "size": 35149,
+          "status": "OK"
+        }
+      ],
+      "license": "BSD-2-Clause (JNI binding); BSD-3-Clause (Zstandard, selected from BSD-3-Clause OR GPL-2.0)",
+      "files": {
+        "compiler-runtime/GCC-RUNTIME-EXCEPTION-3.1.txt": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+        "compiler-runtime/GPL-3.0.txt": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "compiler-runtime/README.txt": "62bf96e41db6f5c781b02db9d82566bbc3246e8c98eee549abbb2a63ca9d7514",
+        "SOURCE-HEADERS.txt": "d37596b4bf0e4c303bc3a02fdae2fcebf3047233e4f2c0ecb7393da43b273775",
+        "upstream-source/LICENSE": "289a6adada5726047b9e68bf607cc44fbbac953bbb4fd29f53ffe75b5cb3e7b1",
+        "upstream-source/src/main/native/COPYING": "f9c375a1be4a41f7b70301dd83c91cb89e41567478859b77eef375a52d782505",
+        "upstream-source/src/main/native/LICENSE": "2c1a7fa704df8f3a606f6fc010b8b5aaebf403f3aeec339a12048f1ba7331a0b"
+      }
+    },
+    {
+      "coordinate": "info.picocli:picocli:4.7.7",
+      "directory": "picocli-4.7.7",
+      "jarSha256": "f86e30fffd10d2b13b8caa8d4b237a7ee61f2ffccf5b1941de718b765d235bf8",
+      "jarUrl": "https://repo.maven.apache.org/maven2/info/picocli/picocli/4.7.7/picocli-4.7.7.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/info/picocli/picocli/4.7.7/picocli-4.7.7-sources.jar",
+      "sourcesSha256": "87916611c616588b20d987868f96e622de6ed447e4b1ff5b662ebd947773e9a6",
+      "additionalSources": [
+        {
+          "file": "picocli-LICENSE",
+          "url": "https://raw.githubusercontent.com/remkop/picocli/v4.7.7/LICENSE",
+          "finalUrl": "https://raw.githubusercontent.com/remkop/picocli/v4.7.7/LICENSE",
+          "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+          "size": 11357,
+          "status": "OK"
+        }
+      ],
+      "license": "Apache-2.0",
+      "files": {
+        "LICENSE": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+        "SOURCE-HEADERS.txt": "c7246c0b1c8f89facc16222a6d9110576f93e9d211b5923cced1612652231637"
+      }
+    },
+    {
+      "coordinate": "org.apache.kafka:kafka-clients:4.4.0",
+      "directory": "kafka-clients-4.4.0",
+      "jarSha256": "1ab07317eb6633241392449d329dbdc5d9251e6ffc4926860f42dd966e88bdf9",
+      "jarUrl": "https://repo.maven.apache.org/maven2/org/apache/kafka/kafka-clients/4.4.0/kafka-clients-4.4.0.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/org/apache/kafka/kafka-clients/4.4.0/kafka-clients-4.4.0-sources.jar",
+      "sourcesSha256": "5782400b3bf0ee4b92d45478b075194e9539bad9cbec9ed2caba992b4deee0c4",
+      "additionalSources": [],
+      "license": "Apache-2.0; bundled third-party licenses retained where present",
+      "files": {
+        "SOURCE-HEADERS.txt": "76a91ef2054f70f2bdb84b09eda797c5995f8d8161e2b1a0e0861321b85b596f",
+        "upstream-jar/LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "upstream-jar/META-INF/LICENSE.txt": "b1d2870f1a00e4d7f56576e5f0870cba109e041f8af66866cf5b499478e654e7",
+        "upstream-jar/META-INF/NOTICE.txt": "edc84ec4795f0a14adc26133c0481bb50bc1ca9517252bf19afa8265da2432ba",
+        "upstream-jar/NOTICE": "e10a1d2b5812b6eeac08ec087512bbf649739ca23cb7ee610702acb976f42936"
+      }
+    },
+    {
+      "coordinate": "org.slf4j:slf4j-api:2.0.20",
+      "directory": "slf4j-api-2.0.20",
+      "jarSha256": "7e1446499b359675d8aabe6af2de86b85e72ae8a2a932c0b40d0e5ba57097439",
+      "jarUrl": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/2.0.20/slf4j-api-2.0.20.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/2.0.20/slf4j-api-2.0.20-sources.jar",
+      "sourcesSha256": "565e509928d095e20c5d93ca5e3a528e98fc7410c3ca4e84b05ccfadf21b40ba",
+      "additionalSources": [],
+      "license": "MIT",
+      "files": {
+        "SOURCE-HEADERS.txt": "9bca40cc84d6d357548613073074fb5dcef21445b9eab94c65f75bb35346d7ef",
+        "upstream-jar/META-INF/LICENSE.txt": "6632f550c207be8d7d6b5e87f5d7b905bee218d18392d531df457bf60bec1447"
+      }
+    },
+    {
+      "coordinate": "org.snakeyaml:snakeyaml-engine:3.2",
+      "directory": "snakeyaml-engine-3.2",
+      "jarSha256": "88d816316a19c6e7c48b04dc7374522ad436fa51ab105407e95b991f86d21167",
+      "jarUrl": "https://repo.maven.apache.org/maven2/org/snakeyaml/snakeyaml-engine/3.2/snakeyaml-engine-3.2.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/org/snakeyaml/snakeyaml-engine/3.2/snakeyaml-engine-3.2-sources.jar",
+      "sourcesSha256": "6b05d61b1000299f06c1bf6762d0c87dcfa7c70d259beffe633078afb23e8a15",
+      "additionalSources": [
+        {
+          "file": "snakeyaml-LICENSE",
+          "url": "https://codeberg.org/snakeyaml/snakeyaml-engine/raw/tag/snakeyaml-engine-3.2/LICENSE.txt",
+          "finalUrl": "https://codeberg.org/snakeyaml/snakeyaml-engine/raw/tag/snakeyaml-engine-3.2/LICENSE.txt",
+          "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+          "size": 10173,
+          "status": "OK"
+        }
+      ],
+      "license": "Apache-2.0",
+      "files": {
+        "LICENSE.txt": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+        "SOURCE-HEADERS.txt": "322ad54754162ef9b95865734707df3923a16ada4ec2405f5dd8caa1bcd10e62"
+      }
+    },
+    {
+      "coordinate": "org.xerial.snappy:snappy-java:1.1.10.12",
+      "directory": "snappy-java-1.1.10.12",
+      "jarSha256": "1c03ce77b3f2e926c25a952612e372404d80bc88c6c8052bede964804fabd732",
+      "jarUrl": "https://repo.maven.apache.org/maven2/org/xerial/snappy/snappy-java/1.1.10.12/snappy-java-1.1.10.12.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/org/xerial/snappy/snappy-java/1.1.10.12/snappy-java-1.1.10.12-sources.jar",
+      "sourcesSha256": "e1824abac0dd76c849b8b67291d6e465cd02306a211d562a34e73c83cc0b5ef2",
+      "additionalSources": [
+        {
+          "file": "snappy-source.tar.gz",
+          "url": "https://codeload.github.com/xerial/snappy-java/tar.gz/refs/tags/v1.1.10.12",
+          "finalUrl": "https://codeload.github.com/xerial/snappy-java/tar.gz/refs/tags/v1.1.10.12",
+          "sha256": "0cb4da2f18335d535294d98768dc7043e6e9e8632594e85b0cc8332268d67190",
+          "size": 4074340,
+          "status": "OK"
+        },
+        {
+          "file": "snappy-native.tar.gz",
+          "url": "https://codeload.github.com/google/snappy/tar.gz/refs/tags/1.1.10",
+          "finalUrl": "https://codeload.github.com/google/snappy/tar.gz/refs/tags/1.1.10",
+          "sha256": "49d831bffcc5f3d01482340fe5af59852ca2fe76c3e05df0e67203ebbe0f1d90",
+          "size": 1105312,
+          "status": "OK"
+        },
+        {
+          "file": "bitshuffle-native.tar.gz",
+          "url": "https://codeload.github.com/kiyo-masui/bitshuffle/tar.gz/refs/tags/0.3.4",
+          "finalUrl": "https://codeload.github.com/kiyo-masui/bitshuffle/tar.gz/refs/tags/0.3.4",
+          "sha256": "275a5f329b9eba2e4e7a540e8a4211f01a919a59f2b428299da680c7f0a15c3e",
+          "size": 110150,
+          "status": "OK"
+        },
+        {
+          "file": "GCC-RUNTIME-EXCEPTION-3.1.txt",
+          "url": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING.RUNTIME",
+          "finalUrl": "https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-15.2.0/COPYING.RUNTIME",
+          "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+          "size": 3324,
+          "status": "OK"
+        },
+        {
+          "file": "GPL-3.0.txt",
+          "url": "https://www.gnu.org/licenses/gpl-3.0.txt",
+          "finalUrl": "https://www.gnu.org/licenses/gpl-3.0.txt",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "size": 35149,
+          "status": "OK"
+        }
+      ],
+      "license": "Apache-2.0 (binding/Hadoop); BSD-3-Clause (Snappy); MIT (Bitshuffle); additional native notices retained",
+      "nativeSource": "SNAPPY_VERSION=1.1.10; BITSHUFFLE_VERSION=0.3.4, from the exact binding source VERSION file",
+      "files": {
+        "compiler-runtime/GCC-RUNTIME-EXCEPTION-3.1.txt": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+        "compiler-runtime/GPL-3.0.txt": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "compiler-runtime/README.txt": "62bf96e41db6f5c781b02db9d82566bbc3246e8c98eee549abbb2a63ca9d7514",
+        "SOURCE-HEADERS.txt": "221554ebb8899ae70ccebb7e717366aa44889118a982c3bc0c1e19b8e3d4cd07",
+        "upstream-source/bitshuffle/LICENSE": "ef357c2061cf67db298f9f1565572ee229ad9263582a9f9d0ebff5094f5d10ac",
+        "upstream-source/bitshuffle/lz4/LICENSE": "cd680953c2d0933069840846381b904ef2c02e4cfe6e40e89c4417876f10b2d2",
+        "upstream-source/bitshuffle/lzf/LICENSE.txt": "2731a47c80c4ba5c3fedf00598a9b2359011bca745fdf854615bcbd53f38748a",
+        "upstream-source/snappy/AUTHORS": "710c0a3a4681c8c40f5a59eb794f61093fa142935c647c92f46ea595f0591833",
+        "upstream-source/snappy/COPYING": "55172044f7e241207117448a4d9d6ba1d0925c8ad66b5d4c08c70adfa9cc3de6",
+        "upstream-source/snappy-java/LICENSE": "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5",
+        "upstream-source/snappy-java/NOTICE": "396e5ff756e04da010095628e43cdc9c0b49bd4fd9319e7c52423db6d3cdf00c"
+      }
+    },
+    {
+      "coordinate": "tools.jackson.core:jackson-core:3.3.0",
+      "directory": "jackson-core-3.3.0",
+      "jarSha256": "1496eda4c353276416bd4f672fb3f98be95fb4c86707e8ffcebe04425d63aa63",
+      "jarUrl": "https://repo.maven.apache.org/maven2/tools/jackson/core/jackson-core/3.3.0/jackson-core-3.3.0.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/tools/jackson/core/jackson-core/3.3.0/jackson-core-3.3.0-sources.jar",
+      "sourcesSha256": "a297eb4641231dbc0f3d8f196f6d70416618e3991b5d9a9309a7ba37704c8ad1",
+      "additionalSources": [],
+      "license": "Apache-2.0; bundled third-party licenses retained where present",
+      "files": {
+        "SOURCE-HEADERS.txt": "d3aba899161f82fd975f9d2423ddaabe6925fbe40dcd489227f7a3f9bccab951",
+        "upstream-jar/META-INF/FastDoubleParser-LICENSE": "59067508e44346bf93dc9c5e4d673a67ecd77988c2020bb5e0f8667eb199f396",
+        "upstream-jar/META-INF/FastDoubleParser-ThirdParty-LICENSE": "dbc36f9422a40d58d1a214080583667cfd37d61c2fae1657d981edda2a60727f",
+        "upstream-jar/META-INF/jsoniter-scala-LICENSE": "1d827e11e21a5f51f0b13ba37268515cbb312f2e39476744327a76726ca16084",
+        "upstream-jar/META-INF/LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "upstream-jar/META-INF/NOTICE": "96c0763228bb6ce86d55be586e1cf60b947b1d2efd84f953201ab809fee35a57",
+        "upstream-jar/META-INF/xjb-LICENSE": "5655de88c9d5a29e358f67884af12a1ffbd46449e53a331c449c55beaee29784"
+      }
+    },
+    {
+      "coordinate": "tools.jackson.core:jackson-databind:3.3.0",
+      "directory": "jackson-databind-3.3.0",
+      "jarSha256": "856b7348bd08efe5791cf617cc3bed21f5f4a02569507c61e946666d13c33ba4",
+      "jarUrl": "https://repo.maven.apache.org/maven2/tools/jackson/core/jackson-databind/3.3.0/jackson-databind-3.3.0.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/tools/jackson/core/jackson-databind/3.3.0/jackson-databind-3.3.0-sources.jar",
+      "sourcesSha256": "f3fcbbf4e2a52840136294bc1edd046eefecdacf13007f1ced93396db5106a67",
+      "additionalSources": [],
+      "license": "Apache-2.0; bundled third-party licenses retained where present",
+      "files": {
+        "SOURCE-HEADERS.txt": "ef89ee88e098416cb78c77e7be6401567a6ca42723695d25a06b6b1021502bc6",
+        "upstream-jar/META-INF/LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "upstream-jar/META-INF/NOTICE": "d3fa47349b4ba4a3763bf635b930f8877073aa3915a3f3e45fe4b1842fc60302"
+      }
+    },
+    {
+      "coordinate": "tools.jackson.dataformat:jackson-dataformat-yaml:3.3.0",
+      "directory": "jackson-dataformat-yaml-3.3.0",
+      "jarSha256": "0291c4d70e05d01a7381605282a933c8225aa711503bd7c7aed3baa6c1a2fe68",
+      "jarUrl": "https://repo.maven.apache.org/maven2/tools/jackson/dataformat/jackson-dataformat-yaml/3.3.0/jackson-dataformat-yaml-3.3.0.jar",
+      "sourcesUrl": "https://repo.maven.apache.org/maven2/tools/jackson/dataformat/jackson-dataformat-yaml/3.3.0/jackson-dataformat-yaml-3.3.0-sources.jar",
+      "sourcesSha256": "68628aea3b66c29ef1f921a6ebd1753ec512b010f770b76395fb0c066af76943",
+      "additionalSources": [],
+      "license": "Apache-2.0; bundled third-party licenses retained where present",
+      "files": {
+        "upstream-jar/META-INF/LICENSE": "9e255394eb9f8cfdcdf599dd150d9ca3e922ab4d31cb5e83519479a91e1d3072",
+        "upstream-jar/META-INF/NOTICE": "5828ffe74ea0ee4bf896654026f05fed1ead1d22acd577cc1eec9be0bc0de1ed"
+      }
+    }
+  ]
+}

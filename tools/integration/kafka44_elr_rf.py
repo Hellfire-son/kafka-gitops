@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Opt-in ELR-enabled RF tests. Reuses the original Docker/identity gate; never cleans up resources."""
 import argparse, hashlib, json, os, pathlib, subprocess, time
 from kafka44_lab import LabRun, ROOT, JAR, JAVA, PROPS, CLUSTER, ENV, read, save

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 name: kafka-gitops-371-lab
 
 # Apache 3.7.1 KRaft lab. Separate volumes/network; host access is loopback only.

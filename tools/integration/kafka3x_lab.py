@@ -1,5 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
 """Separate, opt-in Kafka 3.x runner. Does not alter Kafka 4.4 gates or start/stop/delete resources."""
 import argparse, datetime, hashlib, ipaddress, json, os, pathlib, secrets, socket, subprocess, sys, time
+from lab_paths import lab_directory, java_executable, bind_source_paths
 
 if not __debug__:
     raise SystemExit('Safety assertions must be enabled; do not use python -O.')
@@ -12,13 +14,13 @@ def select_profile(version):
     global PROFILE,LAB,ROOT,PROPS,CLUSTER,BOOTSTRAP,PROJECT,BASE_PORT,IMAGE
     assert version in ('371','323'),'Unknown legacy lab'
     PROFILE=version;PROJECT='kafka-gitops-'+version+'-lab'
-    LAB=pathlib.Path('F:/DEV/GitOps/kafka-lab-'+version);ROOT=LAB/'integration';PROPS=ROOT/'client.properties'
+    LAB=lab_directory(version);ROOT=LAB/'integration';PROPS=ROOT/'client.properties'
     BASE_PORT={'371':23791,'323':23291}[version]
     BOOTSTRAP=','.join('127.0.0.1:'+str(BASE_PORT+i) for i in (1,2,3))
     CLUSTER='GV57l31pRMa-yIjZQBWyww' if version=='371' else None
     IMAGE='apache/kafka:3.7.1' if version=='371' else 'kafka-gitops-lab/kafka:3.2.3-verified'
 
-JAVA=str(pathlib.Path(os.environ['JAVA_HOME'])/'bin/java.exe')
+JAVA=java_executable()
 ENV={k:v for k,v in os.environ.items() if not k.startswith(('KAFKA_','CCLOUD_'))}
 DOCKER=['docker','--context','desktop-linux']
 
@@ -34,8 +36,7 @@ def jsoncmd(args):
 def verify_config_bind(binding,filename):
     assert PROFILE=='323' and filename in ['broker-1.properties','broker-2.properties','broker-3.properties','zookeeper.properties']
     config=LAB/'config'/filename
-    # Docker Desktop reports the exact Linux mirror of the known Windows F: config path.
-    allowed={str(config.resolve()),'/run/desktop/mnt/host/f/DEV/GitOps/kafka-lab-323/config/'+filename}
+    allowed=bind_source_paths(str(config.resolve()))
     assert binding['Source'] in allowed and binding['Destination']=='/opt/lab/config/'+filename and not binding['RW']
 
 class LegacyRun:

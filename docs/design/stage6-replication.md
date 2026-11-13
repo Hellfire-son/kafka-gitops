@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+> Historical stage evidence: the dates, versions, hashes and test outcomes below describe that stage and artifact. Personal machine paths were anonymized for publication. See [0.4.0 preparation](../release/v0.4.0-release-preparation.md) for the current release status.
+
 # Stage 6 — безопасное управление replication factor
 
 Дата фиксации: 2026-11-10. Основа: joschi/kafka-gitops 0.3.1 с исправлениями Stage 1–5,

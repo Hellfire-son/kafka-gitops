@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Offline guard checks. No Docker, network, Kafka, or lab writes."""
 import copy, sys, unittest
 sys.dont_write_bytecode=True

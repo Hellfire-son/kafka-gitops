@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+> Historical stage evidence: the dates, versions, hashes and test outcomes below describe that stage and artifact. Personal machine paths were anonymized for publication. See [0.4.0 preparation](../release/v0.4.0-release-preparation.md) for the current release status.
+
 # Задание 2: Kafka compatibility, RF и CLI UX
 
 Дата: 12.11.2026 (Europe/Moscow). Ветка: `feature/ads-gitops`.
@@ -336,7 +339,7 @@ ACL READ/WRITE/CREATE, существующий opt-in DESCRIBE и профил�
 Выполнена финальная offline-команда:
 
 ```powershell
-.\gradlew.bat --gradle-user-home C:\Users\hellf\.gradle --offline --no-daemon --no-scan --console plain --warning-mode all clean classes testClasses test shadowJar buildExecutableJar buildRelease
+.\gradlew.bat --gradle-user-home "$env:USERPROFILE\.gradle" --offline --no-daemon --no-scan --console plain --warning-mode all clean classes testClasses test shadowJar buildExecutableJar buildRelease
 ```
 
 Все перечисленные задачи успешны: **BUILD SUCCESSFUL, 27s, 9 executed tasks**.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package com.devshawn.kafka.gitops.domain.metadata;
 
 /** Ephemeral capability evidence. Reasons are codes, never Kafka config values or exception messages. */

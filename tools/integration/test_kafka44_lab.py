@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Offline safety regression for the integration runner. No filesystem/network/Docker/Kafka operations."""
 import sys
 import unittest

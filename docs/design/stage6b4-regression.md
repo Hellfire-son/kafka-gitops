@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+> Historical stage evidence: the dates, versions, hashes and test outcomes below describe that stage and artifact. Personal machine paths were anonymized for publication. See [0.4.0 preparation](../release/v0.4.0-release-preparation.md) for the current release status.
+
 # Stage 6B4 — финальная регрессия и аудит Replication Factor
 
 Дата: **2026-11-11**, ветка `feature/ads-gitops`, исходный HEAD
@@ -187,7 +190,7 @@ compile/test toolchain к AZUL не менялась. Git Bash добавлен 
 Запуск выполнен `--offline --no-scan`, CI/DEBUG очищены, build scan не публиковался.
 
 ```powershell
-.\gradlew.bat --gradle-user-home C:\Users\hellf\.gradle --offline --no-daemon --no-scan --console plain --warning-mode all --init-script .gradle/ads-replication-stage6b4/safe-unit.init.gradle --init-script .gradle/ads-kafka-upgrade-4c/inventory.init.gradle -PadsInventoryOutput=.gradle/ads-replication-stage6b4/runtime-inventory.json clean classes testClasses test shadowJar buildExecutableJar buildRelease adsKafkaInventory
+.\gradlew.bat --gradle-user-home "$env:USERPROFILE\.gradle" --offline --no-daemon --no-scan --console plain --warning-mode all --init-script .gradle/ads-replication-stage6b4/safe-unit.init.gradle --init-script .gradle/ads-kafka-upgrade-4c/inventory.init.gradle -PadsInventoryOutput=.gradle/ads-replication-stage6b4/runtime-inventory.json clean classes testClasses test shadowJar buildExecutableJar buildRelease adsKafkaInventory
 ```
 
 `test` запускался только со строгим allowlist **33 unit Spec**, исключением

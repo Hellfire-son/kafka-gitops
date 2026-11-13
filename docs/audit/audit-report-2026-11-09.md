@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+> Historical stage evidence: the dates, versions, hashes and test outcomes below describe that stage and artifact. Personal machine paths were anonymized for publication. See [0.4.0 preparation](../release/v0.4.0-release-preparation.md) for the current release status.
+
 # Аудит зависимостей Kafka GitOps для ADS
 
 Дата проверки: **9 ноября 2026 года**. Репозиторий `joschi/kafka-gitops`, основа 0.3.1; рабочая ветка `feature/ads-gitops`, HEAD `349df9be1a497f93ee40e4dd4d94fe70bf5aad5e`. Учтены уже существующие изменения задач №1 и №2. Среда: Windows 11, Eclipse Temurin JDK 21.0.13.

@@ -1,3 +1,10 @@
+<!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
+Version 0.4.0 is an independent community-maintained continuation of
+joschi/kafka-gitops 0.3.1, originally created by Shawn Seymour.
+See [release notes](release/v0.4.0-release-notes.md),
+[installation/build](installation.md) and [security limits](../SECURITY.md).
+No official vendor endorsement or production-readiness claim is made.
+
 <div align="center">
     <h1>GitOps for Apache Kafka</h1>
     <img src="https://i.imgur.com/jnDwYp8.png"/>
@@ -57,5 +64,5 @@ Copyright (c) 2020 Shawn Seymour.
 
 Licensed under the [Apache 2.0 license][license].
 
-[contributing]: https://github.com/joschi/kafka-gitops/blob/master/CONTRIBUTING.md
-[license]: https://github.com/joschi/kafka-gitops/blob/master/LICENSE
+[contributing]: ../CONTRIBUTING.md
+[license]: ../LICENSE

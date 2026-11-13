@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+> Historical stage evidence: the dates, versions, hashes and test outcomes below describe that stage and artifact. Personal machine paths were anonymized for publication. See [0.4.0 preparation](../release/v0.4.0-release-preparation.md) for the current release status.
+
 # Kafka 4.4: ELR-enabled RF, результаты
 
 Дата: 12.11.2026, Europe/Moscow. Ветка `feature/ads-gitops`.
@@ -21,7 +24,7 @@ NOT_TESTED относится только к наблюдению промеж�
 
 | Параметр | Фактическое значение |
 |---|---|
-| Lab | `F:\DEV\GitOps\kafka-lab` |
+| Lab | `../kafka-lab` |
 | Docker context / Compose project | `desktop-linux` / `kafka-gitops-lab` |
 | Docker Engine / Compose | 29.9.3 / 5.7.0 |
 | Образ | `apache/kafka:4.4.0`, версия независимо прочитана Kafka CLI во всех трёх контейнерах |
@@ -157,7 +160,7 @@ executable и ZIP упаковывают его. Java major=65, Kafka Client=4.4
 ## Evidence и воспроизведение
 
 Полный основной evidence:
-`F:\DEV\GitOps\kafka-lab\gitops-integration\run-20261112-231114-925176`.
+`../kafka-lab\gitops-integration\run-20261112-231114-925176`.
 Содержит manifest со статусами/командами/exit codes, YAML/JSON, Docker proofs, before/after
 metadata, API audits, наблюдения и data checks. Частичный прогон сохранён в соседнем каталоге.
 Прежний `run-20261112-180451-668a0e` и `latest-run.json` старого runner сохранены;
@@ -169,7 +172,7 @@ metadata, API audits, наблюдения и data checks. Частичный п
 
 ```powershell
 # Probes компилируются отдельно от приложения; запись в lab требует доступа к этому каталогу.
-javac -cp build/libs/kafka-gitops-all.jar -d F:/DEV/GitOps/kafka-lab/gitops-integration/probe-classes tools/integration/KafkaLabProbe.java tools/integration/KafkaElrProbe.java
+javac -cp build/libs/kafka-gitops-all.jar -d ../kafka-lab/gitops-integration/probe-classes tools/integration/KafkaLabProbe.java tools/integration/KafkaElrProbe.java
 python -B tools/integration/kafka44_elr_rf.py --phase readonly
 # Использовать НОВЫЙ RUN_DIR из вывода readonly:
 python -B tools/integration/kafka44_elr_rf.py --phase rf --run-dir <NEW_RUN_DIR> --allow-writes

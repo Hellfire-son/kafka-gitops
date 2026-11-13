@@ -1,3 +1,4 @@
+<!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
 - **Getting Started**
 - [Introduction](/documentation.md)
 - [Installation](/installation.md)
@@ -6,6 +7,7 @@
 - [Confluent Cloud](/confluent-cloud.md)
 - [Permissions](/permissions.md)
 - [Specification](/specification.md)
+- [0.4.0 Release Notes](/release/v0.4.0-release-notes.md)
 - **Links**
-- [Contributing](https://github.com/joschi/kafka-gitops/blob/master/CONTRIBUTING.md)
-- [GitHub](https://github.com/joschi/kafka-gitops)
+- [Original project](https://github.com/devshawn/kafka-gitops)
+- [Upstream base](https://github.com/joschi/kafka-gitops)

@@ -1,17 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
 """Explicit, isolated Kafka 4.4 Docker lab runner. Never starts/stops containers or deletes resources."""
 import argparse, datetime, hashlib, ipaddress, json, os, pathlib, secrets, socket, subprocess, sys, time
+from lab_paths import lab_directory, java_executable
 
 if not __debug__:
     raise SystemExit('Safety assertions must be enabled; do not use python -O.')
 
 REPO=pathlib.Path(__file__).resolve().parents[2]
-LAB=pathlib.Path('F:/DEV/GitOps/kafka-lab')
+LAB=lab_directory('44')
 ROOT=LAB/'gitops-integration'
 JAR=REPO/'build/libs/kafka-gitops-all.jar'
 CLUSTER='4L6g3nShT-eMCtK--X86sw'
 BOOTSTRAP='127.0.0.1:19092,127.0.0.1:19093,127.0.0.1:19094'
 PROPS=ROOT/'client.properties'
-JAVA=str(pathlib.Path(os.environ['JAVA_HOME'])/'bin/java.exe')
+JAVA=java_executable()
 ENV={k:v for k,v in os.environ.items() if not k.startswith(('KAFKA_','CCLOUD_'))}
 DOCKER=['docker','--context','desktop-linux']
 

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+> Historical stage evidence: the dates, versions, hashes and test outcomes below describe that stage and artifact. Personal machine paths were anonymized for publication. See [0.4.0 preparation](../release/v0.4.0-release-preparation.md) for the current release status.
+
 # Stage 6B2 — планирование replication factor
 
 Дата: 2026-11-10. Основа: [проект Stage 6A и контракт Stage 6B1](stage6-replication.md).

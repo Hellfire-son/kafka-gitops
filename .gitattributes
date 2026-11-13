@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+*.md text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.html text eol=lf
+/gradlew text eol=lf
+/LICENSE text eol=lf
+# Legal hashes are over the original upstream bytes, including original line endings.
+/legal/** -text
+# Preserve verified upstream formatting; hashes, not whitespace rewrites, guard these texts.
+/legal/third-party/** whitespace=-blank-at-eol,-blank-at-eof,cr-at-eol
+/gradle/wrapper/*.jar binary

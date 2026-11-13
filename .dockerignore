@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# A future Docker build only needs the prepared executable, with its legal bundle.
+**
+!Dockerfile
+!build/
+!build/output/
+!build/output/kafka-gitops

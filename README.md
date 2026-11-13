@@ -1,8 +1,18 @@
-# kafka-gitops
+<!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
+# kafka-gitops 0.4.0
 
-[![Java CI](https://github.com/joschi/kafka-gitops/workflows/Java%20CI/badge.svg)](https://github.com/joschi/kafka-gitops/actions/workflows/gradle.yml)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=joschi_kafka-gitops&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=joschi_kafka-gitops)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+Independent community-maintained fork of
+[joschi/kafka-gitops 0.3.1](https://github.com/joschi/kafka-gitops),
+originally created by **Shawn Seymour** as
+[devshawn/kafka-gitops](https://github.com/devshawn/kafka-gitops).
+Version 0.4.0 is an independent continuation. It is not endorsed or officially
+supported by the Apache Software Foundation, Arenadata, Confluent, or the
+original maintainers. See [provenance and modifications](CHANGES-FROM-UPSTREAM.md).
+
+Requires **Java 21** and uses **Kafka Client 4.4.0**. One universal JAR serves
+the tested Kafka versions. This release is being prepared; the new fork and
+download URL have not been assigned. [Release notes](docs/release/v0.4.0-release-notes.md)
+describe compatibility, migration and remaining security limitations.
 
 Manage Apache Kafka topics and ACLs through a desired state file.
 
@@ -18,7 +28,9 @@ Topics and services get defined in a YAML file. When run, `kafka-gitops` compare
 
 This tool also generates the needed ACLs for each type of application. There is no need to manually create a bunch of ACLs for Kafka Connect, Kafka Streams, etc. By defining your services, `kafka-gitops` will build the necessary ACLs.
 
-This tool supports self-hosted Kafka, managed Kafka, and Confluent Cloud clusters.
+The tool uses standard Kafka Admin APIs. The verified lab scenarios and
+unverified vendor/security combinations are listed below; managed Kafka and
+Confluent Cloud have not received full integration acceptance for this release.
 
 ## Features
 
@@ -32,7 +44,8 @@ This tool supports self-hosted Kafka, managed Kafka, and Confluent Cloud cluster
 
 ## Getting Started
 
-Documentation on how to install and use this tool can be found on our [documentation site][documentation].
+Start with the [installation and build instructions](docs/installation.md),
+[quick start](docs/quick-start.md) and [documentation][documentation].
 
 ## Usage
 
@@ -120,6 +133,66 @@ services:
       - example-topic
 ```
 
+## Build and run
+
+Use a JDK 21 installation through `JAVA_HOME` or `PATH`, then the Gradle Wrapper
+(Gradle 9.9.1, Shadow 9.6.1). No system Gradle installation is required.
+
+```bash
+./gradlew --no-daemon --no-scan clean classes testClasses test shadowJar verifyReleaseArtifact buildExecutableJar buildRelease
+java -jar build/libs/kafka-gitops-all.jar --version
+java -jar build/libs/kafka-gitops-all.jar --help
+```
+
+On Windows use `.\gradlew.bat` for the same tasks. The first build downloads
+dependencies from their configured repositories. Safe unit tests exclude the
+external-cluster `*IntegrationSpec` suites; they do not start a Kafka lab.
+Outputs are the universal `build/libs/kafka-gitops-all.jar`, POSIX launcher
+`build/output/kafka-gitops`, and `build/distributions/kafka-gitops-0.4.0.zip`.
+The JAR and ZIP contain component-specific licenses and attribution.
+The standard `build`/`assemble` lifecycle uses these same verified artifacts.
+Old thin/shadow distribution and install tasks are disabled; no generated
+launcher references the disabled plain JAR.
+
+For a downloaded release, verify its JAR against the SHA-256 published with
+that exact release, then run it with Java 21:
+
+```bash
+sha256sum kafka-gitops-all.jar
+java -jar kafka-gitops-all.jar --version
+```
+
+PowerShell equivalent: `Get-FileHash .\kafka-gitops-all.jar -Algorithm SHA256`.
+The future fork's release URL is deliberately unset; upstream Homebrew,
+container and release downloads do not distribute this independent 0.4.0 build.
+
+No Kafka environment variables are mandatory when `--command-config` supplies
+the required client settings. Keep credentials outside Git. See
+[SECURITY.md](SECURITY.md) before using authentication settings or applying changes.
+
+## Compatibility and safety limits
+
+| Target | Live scenario evidence | New 0.4.0 packaging |
+|---|---|---|
+| Apache Kafka 3.2.3 | VERIFIED: topics/configs/partitions and RF 1→2→3→2 | Unit/CLI/packaging verification; live trials not repeated |
+| Apache Kafka 3.7.1 | VERIFIED: topics/configs/partitions and RF 1→2→3→2 | Unit/CLI/packaging verification; live trials not repeated |
+| Apache Kafka 4.4.0 | VERIFIED: topics/configs/partitions, RF and ELR scenarios | Unit/CLI/packaging verification; live trials not repeated |
+| Arenadata Streaming / ADS 4.3.1 | **NOT TESTED LIVE** | No vendor compatibility claim |
+
+The [recorded live tests](docs/testing/kafka-3x-compatibility-results.md) used
+the preceding artifact; the release preparation report records the new hash.
+Changes in this preparation concern version/legal packaging, notices, docs, CI
+and runner path portability. The RF algorithm and ACL/DESCRIBE semantics are
+unchanged. Old live results are not trials of the newly packaged binary.
+Full SASL/TLS/Kerberos/OAuth and ACL enforcement coverage is not established.
+Production readiness, every OS/CPU and all failure/load scenarios are not claimed.
+An updated client does not patch vulnerabilities in old brokers.
+
+`plan` reads and reports changes; only an explicit `apply` performs changes.
+Review RF decreases and fresh preflight blockers. ELR/LastKnownELR unknown data
+is not converted to an empty set; unsupported/unknown safety evidence blocks
+unsafe RF execution. See [ELR details](docs/design/elr-replication-compatibility.md).
+
 ## Contributing
 
 Contributions are very welcome. See [CONTRIBUTING.md][contributing] for details.
@@ -130,6 +203,6 @@ Copyright (c) 2020 Shawn Seymour.
 
 Licensed under the [Apache 2.0 license][license].
 
-[documentation]: https://devshawn.github.io/kafka-gitops
+[documentation]: ./docs/documentation.md
 [contributing]: ./CONTRIBUTING.md
 [license]: ./LICENSE

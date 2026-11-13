@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Additional compatibility negatives on the already completed, new Kafka 4.4 RF namespace."""
 import argparse
 from kafka44_elr_rf import ElrRun, PROPS, read

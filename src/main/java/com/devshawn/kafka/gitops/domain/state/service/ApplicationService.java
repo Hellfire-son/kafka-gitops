@@ -1,3 +1,4 @@
+// Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md.
 package com.devshawn.kafka.gitops.domain.state.service;
 
 import com.devshawn.kafka.gitops.domain.options.GetAclOptions;
