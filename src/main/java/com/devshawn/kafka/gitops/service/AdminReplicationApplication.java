@@ -91,7 +91,7 @@ final class AdminReplicationApplication implements ReplicationApplication {
             if (result.state() != State.COMPLETED) throw new ReplicationExecutionException(result, ReplicationExecutionException.Phase.EXECUTION);
             verificationStarted = true;
             if (!executor.verifyCompleted(request)) {
-                result = unknown(topics, ErrorCategory.STALE_PLAN);
+                result = uncertain(result, ErrorCategory.STALE_PLAN);
                 throw new ReplicationExecutionException(result, ReplicationExecutionException.Phase.VERIFICATION);
             }
             return result;
@@ -101,8 +101,8 @@ final class AdminReplicationApplication implements ReplicationApplication {
         } catch (Exception ex) {
             if (ex instanceof InterruptedException) Thread.currentThread().interrupt();
             if (executionStarted) {
-                result = result == null || result.state() == State.COMPLETED ? unknown(topics,
-                        AdminReassignmentExecutor.category(ex)) : result;
+                if (result == null) result = unknown(topics, AdminReassignmentExecutor.category(ex));
+                else if (result.state() == State.COMPLETED) result = uncertain(result, AdminReassignmentExecutor.category(ex));
                 failure = new ReplicationExecutionException(result, verificationStarted
                         ? ReplicationExecutionException.Phase.VERIFICATION : ReplicationExecutionException.Phase.EXECUTION);
             } else {
@@ -148,5 +148,13 @@ final class AdminReplicationApplication implements ReplicationApplication {
         Map<TopicPartition, PartitionOutcome> outcomes = new HashMap<>();
         partitions(topics).forEach(p -> outcomes.put(p, new PartitionOutcome(State.UNKNOWN, error, Submission.UNKNOWN, State.UNKNOWN)));
         return new ExecutionResult(outcomes.keySet(), outcomes);
+    }
+
+    /** Losing terminal proof must not erase an already recorded submission or the last observed state. */
+    private static ExecutionResult uncertain(ExecutionResult previous, ErrorCategory error) {
+        Map<TopicPartition, PartitionOutcome> outcomes = new HashMap<>();
+        previous.partitions().forEach((tp, outcome) -> outcomes.put(tp,
+                new PartitionOutcome(State.UNKNOWN, error, outcome.submission(), outcome.lastKnownState())));
+        return new ExecutionResult(previous.requested(), outcomes);
     }
 }

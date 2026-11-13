@@ -25,7 +25,7 @@ public final class KafkaLabProbe {
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static <T> T read(KafkaFuture<T> f) throws Exception { return f.get(30, TimeUnit.SECONDS); }
 
-    private static Properties properties(String filename) throws IOException {
+    static Properties properties(String filename) throws IOException {
         Properties p = new Properties();
         try (var in = Files.newInputStream(Path.of(filename))) { p.load(in); }
         if (!BOOTSTRAP.equals(p.getProperty("bootstrap.servers")) || !"PLAINTEXT".equals(p.getProperty("security.protocol")))
@@ -93,7 +93,9 @@ public final class KafkaLabProbe {
                     });
                     topics.put(name,Map.of("topicId",t.topicId().toString(),"configs",safe,"partitions",t.partitions().stream()
                             .sorted(Comparator.comparingInt(p -> p.partition())).map(p -> Map.of("id",p.partition(),"leader",p.leader()==null?-1:p.leader().id(),
-                                    "replicas",p.replicas().stream().map(Node::id).toList(),"isr",p.isr().stream().map(Node::id).sorted().toList())).toList()));
+                                    "replicas",p.replicas().stream().map(Node::id).toList(),"isr",p.isr().stream().map(Node::id).sorted().toList(),
+                                    "elr",p.elr()==null?"UNKNOWN":p.elr().stream().map(Node::id).sorted().toList(),
+                                    "lastKnownElr",p.lastKnownElr()==null?"UNKNOWN":p.lastKnownElr().stream().map(Node::id).sorted().toList())).toList()));
                 });
             }
             result.put("topics",topics);

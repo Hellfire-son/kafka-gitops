@@ -244,7 +244,7 @@ public class PlanManager {
             String name = target.getKey();
             int rf = target.getValue();
             var preview = previews.get(name);
-            previews.put(name, new PlanningReport.TopicPreview(preview.desired(), true, true, preview.current(), snapshot.brokers(), preview.currentConfigValues()));
+            previews.put(name, new PlanningReport.TopicPreview(preview.desired(), true, true, preview.current(), snapshot.brokers(), preview.currentConfigValues(), java.util.Optional.of(snapshot)));
             var before = descriptions.get(name);
             var topic = snapshot.topics().get(name);
             if (topic == null || !before.topicId().toString().equals(topic.topicId()) || before.partitions().size() != topic.partitions().size()
@@ -261,14 +261,20 @@ public class PlanManager {
                 }
             }));
             var elr = snapshot.safety().elrMode();
-            if (elr == com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.UNKNOWN
-                    || elr == com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.ENABLED) {
-                problem(elr == com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.UNKNOWN
-                                ? "ELR_MODE_UNKNOWN" : "ELR_UNSUPPORTED", name, elr.name(), "ELR DISABLED or positively NOT_APPLICABLE",
-                        elr.name(), "RF execution requires a known ELR mode; the current assignment algorithm does not support enabled ELR.");
-                // Keep broker diagnostics and other known changes, without inventing executable assignments.
-                continue;
+            boolean elrBlocked = false;
+            for (var partition : topic.partitions()) {
+                var assessment = com.devshawn.kafka.gitops.service.ElrSafetyPolicy.assess(elr, partition);
+                if (assessment.blocks()) {
+                    String code = elr == com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.UNKNOWN
+                            ? "ELR_MODE_UNKNOWN" : assessment.state() == com.devshawn.kafka.gitops.domain.metadata.CapabilityAssessment.State.UNKNOWN
+                            ? "ELR_UNSUPPORTED" : assessment.reason().name();
+                    problem(code, name + "/partition-" + partition.id(),
+                            com.devshawn.kafka.gitops.service.ElrSafetyPolicy.actual(partition), "known feature mode and healthy confirmed-empty ELR/LastKnownELR",
+                            assessment.state().name(), assessment.reason().name());
+                    elrBlocked = true;
+                }
             }
+            if (elrBlocked) continue;
             try {
                 ReplicationClusterSnapshot projected = new ReplicationClusterSnapshot(snapshot.clusterId(), snapshot.brokers(), snapshot.topics(),
                         snapshot.reassignments(), snapshot.reassignmentState(), projectedLoad, snapshot.loadState(), snapshot.safety());

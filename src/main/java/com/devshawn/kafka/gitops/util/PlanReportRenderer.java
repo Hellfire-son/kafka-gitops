@@ -19,7 +19,18 @@ public final class PlanReportRenderer {
             current.ifPresent(t -> {
                 System.out.println("  Current ordered assignments:");
                 t.partitions().stream().sorted(Comparator.comparingInt(p -> p.partition())).forEach(p ->
-                        System.out.println("    Partition " + p.partition() + ": " + p.replicas().stream().map(n -> n.id()).toList()));
+                        System.out.println("    Partition " + p.partition() + ": " + p.replicas().stream().map(n -> n.id()).toList()
+                                + "; leader=" + (p.leader() == null ? "UNKNOWN" : p.leader().id()) + "; "
+                                + com.devshawn.kafka.gitops.service.ElrSafetyPolicy.actual(com.devshawn.kafka.gitops.service.ElrSafetyPolicy.partition(p))));
+            });
+            preview.replication().ifPresent(snapshot -> {
+                System.out.println("  ELR feature: " + snapshot.safety().elrMode());
+                var observed = snapshot.topics().get(name);
+                if (observed != null) observed.partitions().forEach(p -> {
+                    var assessment = com.devshawn.kafka.gitops.service.ElrSafetyPolicy.assess(snapshot.safety().elrMode(), p);
+                    System.out.println("  ELR safety partition " + p.id() + ": " + assessment.state() + " (" + assessment.reason()
+                            + "); " + com.devshawn.kafka.gitops.service.ElrSafetyPolicy.actual(p));
+                });
             });
             TopicPlan topic = report.changes().getTopicPlans().stream().filter(t -> t.getName().equals(name)).findFirst().orElse(null);
             if (topic != null && topic.getReplicationPlan().isPresent()) {

@@ -15,7 +15,11 @@ public record PlanningReport(DesiredPlan changes, Map<String, TopicPreview> topi
                         String state, String reason, String action) { }
     public record TopicPreview(TopicDetails desired, boolean existenceKnown, boolean exists,
                                Optional<TopicDescription> current, Map<Integer, ReplicationClusterSnapshot.Broker> brokers,
-                               Map<String, String> currentConfigValues) {
+                               Map<String, String> currentConfigValues, Optional<ReplicationClusterSnapshot> replication) {
+        public TopicPreview(TopicDetails desired, boolean existenceKnown, boolean exists, Optional<TopicDescription> current,
+                            Map<Integer, ReplicationClusterSnapshot.Broker> brokers, Map<String, String> currentConfigValues) {
+            this(desired, existenceKnown, exists, current, brokers, currentConfigValues, Optional.empty());
+        }
         public TopicPreview { brokers = Map.copyOf(brokers); currentConfigValues = Map.copyOf(currentConfigValues); }
     }
 }

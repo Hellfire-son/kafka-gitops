@@ -1,0 +1,72 @@
+name: kafka-gitops-323-lab
+
+# Dedicated ZooKeeper-mode archive lab. No ZooKeeper port is published.
+services:
+  zookeeper:
+    image: kafka-gitops-lab/kafka:3.2.3-verified
+    pull_policy: never
+    hostname: zookeeper
+    restart: "no"
+    command: ["/opt/kafka/bin/zookeeper-server-start.sh", "/opt/lab/config/zookeeper.properties"]
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx256m"
+      LOG_DIR: "/tmp/kafka-runtime-logs"
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper
+      - ./config/zookeeper.properties:/opt/lab/config/zookeeper.properties:ro
+    networks: [legacy-host]
+  kafka-1:
+    image: kafka-gitops-lab/kafka:3.2.3-verified
+    pull_policy: never
+    hostname: kafka-1
+    restart: "no"
+    depends_on: [zookeeper]
+    command: ["/opt/kafka/bin/kafka-server-start.sh", "/opt/lab/config/broker-1.properties"]
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+      LOG_DIR: "/tmp/kafka-runtime-logs"
+    ports: ["127.0.0.1:23292:9092"]
+    volumes:
+      - kafka-1-data:/var/lib/kafka/data
+      - ./config/broker-1.properties:/opt/lab/config/broker-1.properties:ro
+    networks: [legacy-host]
+  kafka-2:
+    image: kafka-gitops-lab/kafka:3.2.3-verified
+    pull_policy: never
+    hostname: kafka-2
+    restart: "no"
+    depends_on: [zookeeper]
+    command: ["/opt/kafka/bin/kafka-server-start.sh", "/opt/lab/config/broker-2.properties"]
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+      LOG_DIR: "/tmp/kafka-runtime-logs"
+    ports: ["127.0.0.1:23293:9092"]
+    volumes:
+      - kafka-2-data:/var/lib/kafka/data
+      - ./config/broker-2.properties:/opt/lab/config/broker-2.properties:ro
+    networks: [legacy-host]
+  kafka-3:
+    image: kafka-gitops-lab/kafka:3.2.3-verified
+    pull_policy: never
+    hostname: kafka-3
+    restart: "no"
+    depends_on: [zookeeper]
+    command: ["/opt/kafka/bin/kafka-server-start.sh", "/opt/lab/config/broker-3.properties"]
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+      LOG_DIR: "/tmp/kafka-runtime-logs"
+    ports: ["127.0.0.1:23294:9092"]
+    volumes:
+      - kafka-3-data:/var/lib/kafka/data
+      - ./config/broker-3.properties:/opt/lab/config/broker-3.properties:ro
+    networks: [legacy-host]
+networks:
+  legacy-host:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+volumes:
+  zookeeper-data:
+  kafka-1-data:
+  kafka-2-data:
+  kafka-3-data:

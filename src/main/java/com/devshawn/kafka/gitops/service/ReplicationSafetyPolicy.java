@@ -100,7 +100,6 @@ public final class ReplicationSafetyPolicy {
         if (current.reassignmentState() != VERIFIED) add(global, REASSIGNMENT_UNKNOWN, Condition.UNKNOWN);
         if (current.reassignments().stream().anyMatch(p -> p.topic().equals(topicName))) add(global, ACTIVE_REASSIGNMENT, Condition.INVALID);
         if (evidence.elrMode() == ReplicationSafetyEvidence.ElrMode.UNKNOWN) add(global, ELR_MODE_UNKNOWN, Condition.UNKNOWN);
-        if (evidence.elrMode() == ReplicationSafetyEvidence.ElrMode.ENABLED) add(global, ELR_UNSUPPORTED, Condition.UNKNOWN);
         observation(global, evidence.featuresStable(), FEATURES_CHANGED, ELR_MODE_UNKNOWN);
         observation(global, evidence.configsStable().getOrDefault(topicName, UNKNOWN), CONFIG_CHANGED, CONFIG_STATE_UNKNOWN);
         Topic topic = current.topics().get(topicName);
@@ -138,6 +137,16 @@ public final class ReplicationSafetyPolicy {
             if (actual == null) {
                 issues.add(finding(PARTITION_COUNT_CHANGED, Condition.INVALID, partitionId, null));
             } else {
+                var elr = ElrSafetyPolicy.assess(evidence.elrMode(), actual);
+                if (elr.blocks()) {
+                    boolean unknown = elr.state() == CapabilityAssessment.State.UNKNOWN;
+                    // Retain the legacy code for unavailable ELR API evidence, never merely for ENABLED.
+                    Reason reason = evidence.elrMode() == ReplicationSafetyEvidence.ElrMode.ENABLED && unknown
+                            ? ELR_UNSUPPORTED : unknown ? ELR_PARTITION_UNKNOWN : ELR_PARTITION_UNSAFE;
+                    issues.add(new Finding(reason, unknown ? Condition.UNKNOWN : Condition.INVALID, OptionalInt.of(partitionId),
+                            OptionalInt.empty(), elr.reason() + "; " + ElrSafetyPolicy.actual(actual),
+                            "known feature mode; confirmed empty ELR and LastKnownELR with full healthy ISR when enabled"));
+                }
                 List<Integer> expected = completedPartitions.contains(partitionId) ? assignment.getTargetReplicas() : assignment.getPreviousReplicas();
                 if (!expected.equals(actual.replicas())) issues.add(new Finding(PREVIOUS_REPLICAS_CHANGED, Condition.INVALID,
                         OptionalInt.of(partitionId), OptionalInt.empty(), actual.replicas().toString(), expected.toString()));
@@ -186,7 +195,8 @@ public final class ReplicationSafetyPolicy {
             if (plan.getRackPolicy() == RackAwarenessPolicy.RACK_AWARE) rackCheck(assignment, current, plannedBrokers, issues);
             partitions.put(partitionId, issues);
         }
-        return decisions(plan, global, partitions, warnings);
+        var result = decisions(plan, global, partitions, warnings);
+        return new ReplicationSafetyResult(result.reasons(), result.warnings(), result.operations(), evidence.elrMode());
     }
 
     private static void rackCheck(PartitionReplicaAssignment assignment, ReplicationClusterSnapshot current,

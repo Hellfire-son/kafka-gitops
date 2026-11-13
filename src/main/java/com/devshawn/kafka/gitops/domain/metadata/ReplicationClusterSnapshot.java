@@ -74,10 +74,16 @@ public record ReplicationClusterSnapshot(String clusterId, Map<Integer, Broker> 
         }
     }
 
-    public record Partition(int id, List<Integer> replicas, OptionalInt leader, Set<Integer> isr) {
+    public record Partition(int id, List<Integer> replicas, OptionalInt leader, Set<Integer> isr,
+                            Optional<List<Integer>> elr, Optional<List<Integer>> lastKnownElr) {
         public Partition {
             replicas = List.copyOf(replicas);
             isr = Set.copyOf(isr);
+            elr = elr.map(values -> values.stream().sorted().toList());
+            lastKnownElr = lastKnownElr.map(values -> values.stream().sorted().toList());
+        }
+        public Partition(int id, List<Integer> replicas, OptionalInt leader, Set<Integer> isr) {
+            this(id, replicas, leader, isr, Optional.empty(), Optional.empty());
         }
     }
 }

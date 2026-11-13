@@ -78,10 +78,13 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
         Submission submission = Submission.NOT_SENT;
         Position position = Position.ORIGINAL;
         boolean failed;
+        boolean requireElr;
 
         Work(PreparedOperation operation, PartitionReplicaAssignment assignment) {
             this.operation = operation;
             this.assignment = assignment;
+            this.requireElr = operation.preflight().elrMode()
+                    == com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.ENABLED;
         }
         void known(State next) { state = next; lastKnown = next; error = ErrorCategory.NONE; }
         void fail(ErrorCategory category) { state = State.FAILED; error = category; failed = true; }
@@ -102,7 +105,12 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
                 Observation observed = observe(work, request.deadlineNanos());
                 stopWrites |= update(work, observed);
                 if (stopWrites) stopPending(work);
-                if (work.values().stream().allMatch(w -> w.failed || w.state == State.COMPLETED)) break;
+                if (work.values().stream().allMatch(w -> w.failed || w.state == State.COMPLETED)) {
+                    if (work.values().stream().allMatch(w -> w.state == State.COMPLETED)
+                            && work.values().stream().anyMatch(w -> w.requireElr) && !verifyElrTerminal(request))
+                        invalidate(work, ErrorCategory.PREFLIGHT_BLOCKED);
+                    break;
+                }
                 if (work.values().stream().anyMatch(Work::watching)) {
                     pause(request.deadlineNanos());
                     continue;
@@ -122,6 +130,11 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
                     var result = policy.evaluateForExecution(operation.topicName(), operation.plan(), snapshot, request.permissions(),
                             new ReplicationSafetyPolicy.Constraints(false, false, started, now, Duration.ofSeconds(30)), completed);
                     ready &= result.status() == ReplicationSafetyResult.Status.READY;
+                    var originalMode = operation.preflight().elrMode();
+                    ready &= originalMode == com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.UNKNOWN
+                            || originalMode == snapshot.safety().elrMode();
+                    if (snapshot.safety().elrMode() == com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.ENABLED)
+                        work.values().stream().filter(w -> w.operation.topicName().equals(operation.topicName())).forEach(w -> w.requireElr = true);
                 }
                 if (!ready) {
                     work.values().stream().filter(w -> w.submission == Submission.NOT_SENT && w.state != State.COMPLETED)
@@ -167,9 +180,60 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
     boolean verifyCompleted(Request request) throws Exception {
         Map<TopicPartition, Work> work = new TreeMap<>(ORDER);
         request.operations().forEach(o -> o.plan().getAssignments().forEach(a -> work.put(new TopicPartition(o.topicName(), a.getPartition()), new Work(o, a))));
-        Observation observation = observe(work, request.deadlineNanos());
-        return work.entrySet().stream().allMatch(e -> classify(e.getValue().assignment,
-                partition(observation, e.getKey()), observation.active().get(e.getKey())) == Position.TARGET_COMPLETE);
+        // Metadata fallback can read a lagging broker immediately after another broker reports
+        // completion. Only read again, within one RPC window and the original operation deadline.
+        // No submission, target change or relaxation of the terminal proof takes place here.
+        long verificationDeadline = rpcDeadline(request.deadlineNanos());
+        while (true) {
+            Observation observation = observe(work, verificationDeadline);
+            boolean complete = true;
+            for (var entry : work.entrySet()) {
+                Work item = entry.getValue();
+                var p = partition(observation, entry.getKey());
+                item.requireElr |= p.elr() != null || p.lastKnownElr() != null;
+                if (item.requireElr && ElrSafetyPolicy.observe(ElrSafetyPolicy.partition(p)).blocks()) return false;
+                Set<Integer> replicas = new HashSet<>(p.replicas().stream().map(Node::id).toList());
+                Set<Integer> isr = new HashSet<>(p.isr().stream().map(Node::id).toList());
+                Set<Integer> retained = new HashSet<>(item.assignment.getPreviousReplicas());
+                retained.retainAll(item.assignment.getTargetReplicas());
+                if (p.leader() == null || !replicas.contains(p.leader().id()) || !isr.contains(p.leader().id())
+                        || !replicas.containsAll(isr) || !isr.containsAll(retained)) return false;
+                Position position = classify(item.assignment, p, observation.active().get(entry.getKey()));
+                if (position == Position.CONFLICT || position == Position.STALE) return false;
+                complete &= position == Position.TARGET_COMPLETE && isr.equals(replicas);
+            }
+            if (complete) return work.values().stream().noneMatch(w -> w.requireElr) || verifyElrTerminal(request);
+            if (verificationDeadline - time.nanoTime() <= 0) {
+                System.out.println("[INVALID] RF terminal verification: METADATA_NOT_CONVERGED.");
+                return false;
+            }
+            pause(verificationDeadline);
+        }
+    }
+
+    /** Fresh feature/config/broker/ELR evidence at completion, not just the earlier successful RPC. */
+    private boolean verifyElrTerminal(Request request) throws Exception {
+        long started = time.nanoTime();
+        Set<String> topics = new TreeSet<>(); request.operations().forEach(o -> topics.add(o.topicName()));
+        var snapshot = snapshots.read(admin, topics, timeoutMs(rpcDeadline(request.deadlineNanos())));
+        long now = time.nanoTime();
+        for (var operation : request.operations()) {
+            var originalMode = operation.preflight().elrMode();
+            if (originalMode != com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.UNKNOWN
+                    && originalMode != snapshot.safety().elrMode()) {
+                System.out.println("[INVALID] RF terminal verification: ELR_MODE_CHANGED; Topic: " + operation.topicName());
+                return false;
+            }
+            Set<Integer> completed = new HashSet<>(); operation.plan().getAssignments().forEach(a -> completed.add(a.getPartition()));
+            var result = policy.evaluateForExecution(operation.topicName(), operation.plan(), snapshot, request.permissions(),
+                    new ReplicationSafetyPolicy.Constraints(false,false,started,now,Duration.ofSeconds(30)), completed);
+            if (result.status() != ReplicationSafetyResult.Status.READY) {
+                System.out.println("[INVALID] RF terminal verification; Topic: " + operation.topicName()
+                        + "; reasons=" + result.reasons().stream().map(f -> f.code().name()).distinct().sorted().toList());
+                return false;
+            }
+        }
+        return true;
     }
 
     private Observation observe(Map<TopicPartition, Work> work, long deadline) throws Exception {
@@ -199,6 +263,23 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
             Work item = entry.getValue();
             if (item.failed) continue;
             TopicPartitionInfo actual = partition(observed, entry.getKey());
+            item.requireElr |= actual.elr() != null || actual.lastKnownElr() != null;
+            if (item.requireElr) {
+                var elr = ElrSafetyPolicy.observe(ElrSafetyPolicy.partition(actual));
+                if (elr.blocks()) {
+                    boolean unknown = elr.state() == com.devshawn.kafka.gitops.domain.metadata.CapabilityAssessment.State.UNKNOWN;
+                    item.error = unknown ? ErrorCategory.ELR_UNKNOWN : ErrorCategory.ELR_UNSAFE;
+                    item.state = unknown ? State.UNKNOWN : State.FAILED;
+                    item.failed = true; stop = true;
+                    continue;
+                }
+                Set<Integer> retained = new HashSet<>(item.assignment.getPreviousReplicas());
+                retained.retainAll(item.assignment.getTargetReplicas());
+                if (!new HashSet<>(actual.isr().stream().map(Node::id).toList()).containsAll(retained)) {
+                    item.fail(ErrorCategory.ELR_UNSAFE); stop = true;
+                    continue;
+                }
+            }
             Position position = classify(item.assignment, actual, observed.active().get(entry.getKey()));
             item.position = position;
             switch (position) {
@@ -301,6 +382,8 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
                 TopicPartitionInfo p = actual.partitions().stream().filter(a -> a.partition() == part.id()).findFirst().orElse(null);
                 if (p == null || !part.replicas().equals(p.replicas().stream().map(Node::id).toList())
                         || !part.isr().equals(new HashSet<>(p.isr().stream().map(Node::id).toList()))
+                        || !part.elr().equals(ElrSafetyPolicy.partition(p).elr())
+                        || !part.lastKnownElr().equals(ElrSafetyPolicy.partition(p).lastKnownElr())
                         || part.leader().isPresent() != (p.leader() != null && p.leader().id() >= 0)
                         || (part.leader().isPresent() && part.leader().getAsInt() != p.leader().id())) return false;
             }

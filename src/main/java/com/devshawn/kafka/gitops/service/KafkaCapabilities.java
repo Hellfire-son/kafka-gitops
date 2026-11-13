@@ -41,6 +41,8 @@ final class KafkaCapabilities {
     }
 
     static ElrMode elr(FeatureMetadata features, boolean confirmedZooKeeper) {
+        if (features != null && features.finalizedFeaturesEpoch().isPresent()
+                && features.finalizedFeaturesEpoch().get() < 0) return ElrMode.UNKNOWN;
         if (features != null && features.finalizedFeatures().containsKey("eligible.leader.replicas.version")
                 && features.finalizedFeaturesEpoch().isEmpty()) return ElrMode.UNKNOWN;
         if (features != null && features.finalizedFeaturesEpoch().isPresent()) {

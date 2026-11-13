@@ -1,0 +1,377 @@
+{
+  "unitTests": 879,
+  "unitClasses": [
+    {
+      "name": "com.devshawn.kafka.gitops.CompressionCompatibilityTest",
+      "tests": 59
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.config.KafkaGitopsConfigLoaderSpec",
+      "tests": 8
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.config.KafkaGitopsConfigLoggingSpec",
+      "tests": 20
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.domain.state.AclDetailsSpec",
+      "tests": 3
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.domain.state.CustomAclDetailsSpec",
+      "tests": 29
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.domain.state.service.ApplicationServiceSpec",
+      "tests": 1
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.domain.state.ServiceDetailsSpec",
+      "tests": 1
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.exception.PlanIsUpToDateExceptionSpec",
+      "tests": 1
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.manager.ApplyManagerSpec",
+      "tests": 7
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.manager.PartitionApplySpec",
+      "tests": 6
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.manager.PartitionJsonSpec",
+      "tests": 28
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.manager.PartitionPlanSpec",
+      "tests": 12
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.manager.PlanFixturesSpec",
+      "tests": 12
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.manager.PlanJsonSpec",
+      "tests": 65
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.manager.PlanManagerSpec",
+      "tests": 16
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.manager.ReplicationApplyGuardSpec",
+      "tests": 5
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.manager.ReplicationJsonSpec",
+      "tests": 65
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.manager.ReplicationModelSpec",
+      "tests": 69
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.manager.ReplicationPlanningSpec",
+      "tests": 24
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.manager.ReplicationPreflightSpec",
+      "tests": 44
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.PartitionWorkflowSpec",
+      "tests": 8
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.ReplicationApplicationWorkflowSpec",
+      "tests": 43
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.ReplicationWorkflowSpec",
+      "tests": 4
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.service.ConfluentCloudServiceSpec",
+      "tests": 5
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.service.KafkaDiagnosticsAuditSpec",
+      "tests": 41
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.service.KafkaPartitionServiceSpec",
+      "tests": 25
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.service.ReassignmentExecutionPolicySpec",
+      "tests": 6
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.service.ReassignmentExecutorContractSpec",
+      "tests": 14
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.service.ReassignmentExecutorSpec",
+      "tests": 54
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.service.ReplicaAssignmentPlannerSpec",
+      "tests": 50
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.service.ReplicationMetadataSpec",
+      "tests": 38
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.service.ReplicationPreflightMetadataSpec",
+      "tests": 10
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.service.ReplicationRegressionAuditSpec",
+      "tests": 31
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.service.ReplicationSafetyPolicySpec",
+      "tests": 62
+    },
+    {
+      "name": "com.devshawn.kafka.gitops.util.LogUtilSpec",
+      "tests": 13
+    }
+  ],
+  "cliChecks": [
+    {
+      "name": "help",
+      "exitCode": 0
+    },
+    {
+      "name": "version",
+      "exitCode": 0
+    },
+    {
+      "name": "help-plan",
+      "exitCode": 2
+    },
+    {
+      "name": "help-apply",
+      "exitCode": 2
+    },
+    {
+      "name": "help-validate",
+      "exitCode": 2
+    },
+    {
+      "name": "help-account",
+      "exitCode": 2
+    },
+    {
+      "name": "validate",
+      "exitCode": 0
+    },
+    {
+      "name": "validate-zero",
+      "exitCode": 2
+    },
+    {
+      "name": "new-plan",
+      "exitCode": 0
+    },
+    {
+      "name": "old-plan",
+      "exitCode": 0
+    },
+    {
+      "name": "unknown-plan",
+      "exitCode": 2
+    },
+    {
+      "name": "rf-guard-False",
+      "exitCode": 2
+    },
+    {
+      "name": "rf-guard-True",
+      "exitCode": 2
+    },
+    {
+      "name": "logging-PLAINFalse",
+      "exitCode": 0
+    },
+    {
+      "name": "logging-PLAINTrue",
+      "exitCode": 0
+    },
+    {
+      "name": "logging-SCRAM-SHA-256False",
+      "exitCode": 0
+    },
+    {
+      "name": "logging-SCRAM-SHA-256True",
+      "exitCode": 0
+    },
+    {
+      "name": "logging-SCRAM-SHA-512False",
+      "exitCode": 0
+    },
+    {
+      "name": "logging-SCRAM-SHA-512True",
+      "exitCode": 0
+    },
+    {
+      "name": "logging-GSSAPIFalse",
+      "exitCode": 0
+    },
+    {
+      "name": "logging-GSSAPITrue",
+      "exitCode": 0
+    },
+    {
+      "name": "logging-OAUTHBEARERFalse",
+      "exitCode": 0
+    },
+    {
+      "name": "logging-OAUTHBEARERTrue",
+      "exitCode": 0
+    },
+    {
+      "name": "optin-23",
+      "exitCode": 0
+    },
+    {
+      "name": "optin-24",
+      "exitCode": 0
+    },
+    {
+      "name": "optin-25",
+      "exitCode": 0
+    },
+    {
+      "name": "optin-26",
+      "exitCode": 0
+    },
+    {
+      "name": "bad-plan-flags-27",
+      "exitCode": 2
+    },
+    {
+      "name": "bad-plan-flags-28",
+      "exitCode": 2
+    },
+    {
+      "name": "bad-plan-flags-29",
+      "exitCode": 2
+    },
+    {
+      "name": "apply-preflight-flags-30",
+      "exitCode": 0
+    },
+    {
+      "name": "apply-preflight-flags-31",
+      "exitCode": 0
+    },
+    {
+      "name": "bad-apply-flags-32",
+      "exitCode": 2
+    },
+    {
+      "name": "bad-apply-flags-33",
+      "exitCode": 2
+    },
+    {
+      "name": "bad-apply-flags-34",
+      "exitCode": 2
+    },
+    {
+      "name": "rf-decrease-guard-False",
+      "exitCode": 2
+    },
+    {
+      "name": "rf-decrease-guard-True",
+      "exitCode": 2
+    },
+    {
+      "name": "decrease-manage-only",
+      "exitCode": 2
+    },
+    {
+      "name": "decrease-nodelete",
+      "exitCode": 2
+    },
+    {
+      "name": "command-config-valid",
+      "exitCode": 0
+    },
+    {
+      "name": "bad-config-missing-validate",
+      "exitCode": 2
+    },
+    {
+      "name": "bad-config-missing-plan",
+      "exitCode": 2
+    },
+    {
+      "name": "bad-config-missing-apply",
+      "exitCode": 2
+    },
+    {
+      "name": "bad-config-malformed-validate",
+      "exitCode": 2
+    },
+    {
+      "name": "bad-config-malformed-plan",
+      "exitCode": 2
+    },
+    {
+      "name": "bad-config-malformed-apply",
+      "exitCode": 2
+    },
+    {
+      "name": "bad-state-format",
+      "exitCode": 2
+    },
+    {
+      "name": "bad-state-syntax",
+      "exitCode": 2
+    },
+    {
+      "name": "bad-state-unknown",
+      "exitCode": 2
+    }
+  ],
+  "jar": {
+    "bytes": 25790267,
+    "sha256": "a93fe70ae9b5920150895c8237d9ffb1f7cff2eb9d5736ae53bd825bb18973c8",
+    "entries": 8019,
+    "classes": 7271,
+    "runtimeJars": 13,
+    "nativeResources": 53,
+    "services": 5,
+    "duplicateClasses": 0,
+    "maxEffectiveClassMajor": 65,
+    "ignoredMrVersions": [
+      22,
+      23
+    ],
+    "manifest": "Manifest-Version: 1.0\r\nMain-Class: com.devshawn.kafka.gitops.MainCommand\r\nMulti-Release: true\r\n\r\n"
+  },
+  "java": {
+    "compilerVersion": "21",
+    "vendor": "Eclipse Temurin",
+    "release": 21,
+    "sourceCompatibility": "21",
+    "targetCompatibility": "21"
+  },
+  "reproducibleJar": true,
+  "configurationCache": {
+    "stored": true,
+    "reused": true
+  },
+  "fatJarCodecChecks": {
+    "arrays": 60,
+    "directBuffers": 60,
+    "kafkaRecordBatches": 36,
+    "platform": "Windows amd64"
+  }
+}

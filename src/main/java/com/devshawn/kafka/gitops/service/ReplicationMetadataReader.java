@@ -127,9 +127,7 @@ final class ReplicationMetadataReader {
             TopicDescription description = descriptions.get(name);
             Config config = optional(configs.get(new ConfigResource(ConfigResource.Type.TOPIC, name)), deadline);
             List<Partition> partitions = description.partitions().stream().sorted(Comparator.comparingInt(p -> p.partition()))
-                    .map(p -> new Partition(p.partition(), p.replicas().stream().map(Node::id).toList(),
-                            p.leader() == null || p.leader().id() < 0 ? OptionalInt.empty() : OptionalInt.of(p.leader().id()),
-                            new HashSet<>(p.isr().stream().map(Node::id).toList()))).toList();
+                    .map(ElrSafetyPolicy::partition).toList();
             topics.put(name, new Topic(description.topicId().toString(), partitions, minIsr(config)));
         }
         // Detect obvious drift during collection. This is not an atomic snapshot or proof of execution readiness.
@@ -179,6 +177,27 @@ final class ReplicationMetadataReader {
             Observation stableFeatures = features == null || afterFeatures == null
                     || features.finalizedFeaturesEpoch().isEmpty() || afterFeatures.finalizedFeaturesEpoch().isEmpty()
                     ? UNKNOWN : features.equals(afterFeatures) ? VERIFIED : UNAVAILABLE;
+            // Kafka 4.4 KRaftMetadataCache.features() returns the metadata image offset as epoch.
+            // Reassignment records advance it without changing any feature. Require both complete
+            // feature maps to agree and a known, non-regressing offset, never just ELR=ENABLED.
+            if (mode == ReplicationSafetyEvidence.ElrMode.ENABLED
+                    && KafkaCapabilities.elr(features, zkBefore) == mode
+                    && features.finalizedFeaturesEpoch().isPresent() && afterFeatures.finalizedFeaturesEpoch().isPresent()
+                    && features.finalizedFeaturesEpoch().get() >= 0
+                    && afterFeatures.finalizedFeaturesEpoch().get() >= features.finalizedFeaturesEpoch().get()
+                    && features.finalizedFeatures().equals(afterFeatures.finalizedFeatures())
+                    && features.supportedFeatures().equals(afterFeatures.supportedFeatures())) stableFeatures = VERIFIED;
+            // Legacy KRaft describeFeatures can sample different brokers' metadata-image offsets
+            // (3.7.1 KRaftMetadataCache.features), so even a lower second epoch is not a feature
+            // change. This exception requires positive ELR non-applicability on both reads,
+            // identical complete feature maps and known valid epochs; ENABLED keeps its rule above.
+            if (mode == ReplicationSafetyEvidence.ElrMode.NOT_APPLICABLE
+                    && features != null && afterFeatures != null
+                    && KafkaCapabilities.elr(features, zkBefore) == mode && zkBefore == zkAfter
+                    && features.finalizedFeaturesEpoch().filter(epoch -> epoch >= 0).isPresent()
+                    && afterFeatures.finalizedFeaturesEpoch().filter(epoch -> epoch >= 0).isPresent()
+                    && features.finalizedFeatures().equals(afterFeatures.finalizedFeatures())
+                    && features.supportedFeatures().equals(afterFeatures.supportedFeatures())) stableFeatures = VERIFIED;
             if (mode == ReplicationSafetyEvidence.ElrMode.NOT_APPLICABLE
                     && KafkaCapabilities.elr(features, zkBefore) == mode && Objects.equals(features, afterFeatures)
                     && zkBefore == zkAfter) stableFeatures = VERIFIED;
@@ -206,7 +225,9 @@ final class ReplicationMetadataReader {
         return before.partitions().stream().allMatch(p -> after.partitions().stream().anyMatch(f ->
                 p.partition() == f.partition() && Objects.equals(p.leader(), f.leader())
                         && p.replicas().stream().map(Node::id).toList().equals(f.replicas().stream().map(Node::id).toList())
-                        && new HashSet<>(p.isr().stream().map(Node::id).toList()).equals(new HashSet<>(f.isr().stream().map(Node::id).toList()))));
+                        && new HashSet<>(p.isr().stream().map(Node::id).toList()).equals(new HashSet<>(f.isr().stream().map(Node::id).toList()))
+                        && ElrSafetyPolicy.partition(p).elr().equals(ElrSafetyPolicy.partition(f).elr())
+                        && ElrSafetyPolicy.partition(p).lastKnownElr().equals(ElrSafetyPolicy.partition(f).lastKnownElr())));
     }
 
     private static Map<Integer, Node> nodes(Collection<Node> values) {

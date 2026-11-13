@@ -20,7 +20,7 @@ public interface ReassignmentExecutor {
     enum State { ACCEPTED, RUNNING, COMPLETED, FAILED, UNKNOWN }
     enum ErrorCategory { NONE, VALIDATION, AUTHORIZATION, UNSUPPORTED, STALE_PLAN, BROKER_UNAVAILABLE,
         TIMEOUT, INTERRUPTED, PARTIAL_FAILURE, INTERNAL, UNKNOWN, PREFLIGHT_BLOCKED, CONFLICT, NOT_SUBMITTED,
-        RPC_TIMEOUT, DEADLINE_EXCEEDED }
+        RPC_TIMEOUT, DEADLINE_EXCEEDED, ELR_UNKNOWN, ELR_UNSAFE }
 
     /** SENT means an attempted submission, not acceptance. UNKNOWN means the integration lost that evidence. */
     enum Submission { NOT_SENT, SENT, OBSERVED, UNKNOWN }

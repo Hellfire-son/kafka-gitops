@@ -5,7 +5,11 @@ import java.util.OptionalInt;
 
 /** Typed decisions. Diagnostic text is derived from enums, never from Kafka response strings. */
 public record ReplicationSafetyResult(List<Finding> reasons, List<Warning> warnings,
-                                       List<PartitionDecision> operations) {
+                                       List<PartitionDecision> operations,
+                                       com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode elrMode) {
+    public ReplicationSafetyResult(List<Finding> reasons, List<Warning> warnings, List<PartitionDecision> operations) {
+        this(reasons, warnings, operations, com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.UNKNOWN);
+    }
     public ReplicationSafetyResult {
         reasons = List.copyOf(reasons);
         warnings = List.copyOf(warnings);
@@ -29,7 +33,7 @@ public record ReplicationSafetyResult(List<Finding> reasons, List<Warning> warni
         BROKER_OFFLINE, BROKER_HEALTH_UNKNOWN, BROKER_FENCED, BROKER_FENCING_UNKNOWN,
         STORAGE_UNAVAILABLE, STORAGE_UNKNOWN, BROKER_CORDONED, CORDONING_CHANGED, CORDONING_UNKNOWN,
         PLACEMENT_FORBIDDEN, PLACEMENT_UNKNOWN, DISK_INSUFFICIENT, DISK_CAPACITY_UNKNOWN,
-        ELR_MODE_UNKNOWN, ELR_UNSUPPORTED, FEATURES_CHANGED, CONFIG_STATE_UNKNOWN, CONFIG_CHANGED,
+        ELR_MODE_UNKNOWN, ELR_UNSUPPORTED, ELR_PARTITION_UNKNOWN, ELR_PARTITION_UNSAFE, FEATURES_CHANGED, CONFIG_STATE_UNKNOWN, CONFIG_CHANGED,
         METADATA_UNAVAILABLE, PREFLIGHT_NOT_PERFORMED
     }
 

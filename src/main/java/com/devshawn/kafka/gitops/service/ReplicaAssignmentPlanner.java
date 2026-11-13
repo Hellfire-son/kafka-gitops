@@ -71,6 +71,10 @@ public final class ReplicaAssignmentPlanner {
             Set<Integer> allowed = new TreeSet<>(eligible);
             topic.partitions().forEach(p -> allowed.addAll(p.replicas()));
             for (Partition partition : topic.partitions()) {
+                if (snapshot.safety().elrMode() == com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.ENABLED) {
+                    var elr = ElrSafetyPolicy.assess(snapshot.safety().elrMode(), partition);
+                    require(!elr.blocks(), "ELR planning blocked: " + elr.reason() + "; " + ElrSafetyPolicy.actual(partition));
+                }
                 require(partition.leader().isPresent() && partition.replicas().contains(partition.leader().getAsInt())
                                 && partition.isr().equals(new HashSet<>(partition.replicas())),
                         "RF planning requires a current leader and the complete original ISR; unknown or degraded metadata is blocked.");
