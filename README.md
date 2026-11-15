@@ -10,9 +10,10 @@ supported by the Apache Software Foundation, Arenadata, Confluent, or the
 original maintainers. See [provenance and modifications](CHANGES-FROM-UPSTREAM.md).
 
 Requires **Java 21** and uses **Kafka Client 4.4.0**. One universal JAR serves
-the tested Kafka versions. This release is being prepared; the new fork and
-download URL have not been assigned. [Release notes](docs/release/v0.4.0-release-notes.md)
-describe compatibility, migration and remaining security limitations.
+the tested Kafka versions. The independent fork is
+[Hellfire-son/kafka-gitops](https://github.com/Hellfire-son/kafka-gitops).
+The release notes below describe compatibility, migration and remaining
+security limitations.
 
 Manage Apache Kafka topics and ACLs through a desired state file.
 
@@ -36,9 +37,9 @@ Confluent Cloud have not received full integration acceptance for this release.
 
 - 🚀  **Built For CI/CD**: Made for CI/CD pipelines to automate the management of topics & ACLs.
 - 🔥  **Configuration as code**: Describe your desired state and manage it from a version-controlled declarative file.
-- 👍  **Easy to use**: Deep knowledge of Kafka administration or ACL management is **NOT** required. 
-- ⚡️️  **Plan & Apply**: Generate and view a plan with or without executing it against your cluster.
-- 💻  **Portable**: Works across self-hosted clusters, managed clusters, and even Confluent Cloud clusters.
+- 👍  **Easy to use**: Deep knowledge of Kafka administration or ACL management is **NOT** required.
+- ⚡️️  **Plan & Apply**: Generate a read-only plan, review it, then apply changes explicitly.
+- 💻  **Portable**: Uses standard Kafka Admin APIs; tested versions and unverified managed-cluster combinations are listed below.
 - 🦄  **Idempotency**: Executing the same desired state file on an up-to-date cluster will yield the same result.
 - ☀️  **Continue from failures**: If a specific step fails during an apply, you can fix your desired state and re-run the command. You can execute `kafka-gitops` again without needing to rollback any partial successes.
 
@@ -46,6 +47,15 @@ Confluent Cloud have not received full integration acceptance for this release.
 
 Start with the [installation and build instructions](docs/installation.md),
 [quick start](docs/quick-start.md) and [documentation][documentation].
+
+## Release Notes / Документация релиза
+
+- [Kafka GitOps v0.4.0 — English Release Notes](docs/release/kafka-gitops-v0.4.0-release-notes-en.md)
+- [Kafka GitOps v0.4.0 — описание выпуска на русском языке](docs/release/kafka-gitops-v0.4.0-release-notes-ru.md)
+
+Both versions cover the final JAR, CLI usage, compatibility, test results and
+security limits. Earlier preparation-status statements in linked documents
+describe their recorded stage; the final release-JAR evidence is summarized here.
 
 ## Usage
 
@@ -163,8 +173,14 @@ java -jar kafka-gitops-all.jar --version
 ```
 
 PowerShell equivalent: `Get-FileHash .\kafka-gitops-all.jar -Algorithm SHA256`.
-The future fork's release URL is deliberately unset; upstream Homebrew,
-container and release downloads do not distribute this independent 0.4.0 build.
+Use the independent fork's
+[GitHub Releases](https://github.com/Hellfire-son/kafka-gitops/releases) when
+downloading this build. Upstream Homebrew, container and release downloads do
+not distribute this independent 0.4.0 artifact. The release JAR is 26 018 771 bytes:
+
+```text
+a11deccb969864be1cd30f93cddc4cbbe4f2f395a1f3cc6619400f25f4524f4b  kafka-gitops-all.jar
+```
 
 No Kafka environment variables are mandatory when `--command-config` supplies
 the required client settings. Keep credentials outside Git. See
@@ -172,21 +188,24 @@ the required client settings. Keep credentials outside Git. See
 
 ## Compatibility and safety limits
 
-| Target | Live scenario evidence | New 0.4.0 packaging |
+| Target | Earlier integration trials | Final v0.4.0 JAR acceptance, 2026-11-14 |
 |---|---|---|
-| Apache Kafka 3.2.3 | VERIFIED: topics/configs/partitions and RF 1→2→3→2 | Unit/CLI/packaging verification; live trials not repeated |
-| Apache Kafka 3.7.1 | VERIFIED: topics/configs/partitions and RF 1→2→3→2 | Unit/CLI/packaging verification; live trials not repeated |
-| Apache Kafka 4.4.0 | VERIFIED: topics/configs/partitions, RF and ELR scenarios | Unit/CLI/packaging verification; live trials not repeated |
-| Arenadata Streaming / ADS 4.3.1 | **NOT TESTED LIVE** | No vendor compatibility claim |
+| Apache Kafka 3.2.3 | PASS: topics/configs/partition increases and RF 1→2→3→2 | PASS: plan, new test topic, RF 1→2 |
+| Apache Kafka 3.7.1 | PASS: topics/configs/partition increases and RF 1→2→3→2 | PASS: plan, new test topic, RF 1→2 |
+| Apache Kafka 4.4.0 | PASS: topics/configs/partition increases and RF 1→2→3→2; ELR trials | PASS: plan, new test topic, RF 1→2→3→2; ELR remained enabled at level 1 |
+| Arenadata Streaming / ADS 4.3.1 | **NOT TESTED LIVE** | **NOT TESTED LIVE**; no vendor compatibility claim |
 
-The [recorded live tests](docs/testing/kafka-3x-compatibility-results.md) used
-the preceding artifact; the release preparation report records the new hash.
-Changes in this preparation concern version/legal packaging, notices, docs, CI
-and runner path portability. The RF algorithm and ACL/DESCRIBE semantics are
-unchanged. Old live results are not trials of the newly packaged binary.
+The [earlier integration results](docs/testing/kafka-3x-compatibility-results.md)
+and [final technical review](docs/release/v0.4.0-final-review.md) describe different
+artifacts and test scopes. The final review tested the exact release JAR identified
+above; its Kafka 3.x checks do not repeat the full earlier integration matrix.
+Final recorded checks: **1039 Java tests, 26 Python guard tests, 56 CLI smoke
+checks and 156 codec/JNI checks — PASS**, separately from the live trials.
+Existing ACL/DESCRIBE semantics are unchanged.
 Full SASL/TLS/Kerberos/OAuth and ACL enforcement coverage is not established.
 Production readiness, every OS/CPU and all failure/load scenarios are not claimed.
 An updated client does not patch vulnerabilities in old brokers.
+Kafka 3.x compatibility is not a recommendation for new production deployments.
 
 `plan` reads and reports changes; only an explicit `apply` performs changes.
 Review RF decreases and fresh preflight blockers. ELR/LastKnownELR unknown data
