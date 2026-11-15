@@ -1,227 +1,209 @@
 <!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
-# kafka-gitops 0.4.0
+# Kafka GitOps
 
-Independent community-maintained fork of
-[joschi/kafka-gitops 0.3.1](https://github.com/joschi/kafka-gitops),
-originally created by **Shawn Seymour** as
-[devshawn/kafka-gitops](https://github.com/devshawn/kafka-gitops).
-Version 0.4.0 is an independent continuation. It is not endorsed or officially
-supported by the Apache Software Foundation, Arenadata, Confluent, or the
-original maintainers. See [provenance and modifications](CHANGES-FROM-UPSTREAM.md).
+Declarative management of Apache Kafka topics, configurations and ACLs.
 
-Requires **Java 21** and uses **Kafka Client 4.4.0**. One universal JAR serves
-the tested Kafka versions. The independent fork is
-[Hellfire-son/kafka-gitops](https://github.com/Hellfire-son/kafka-gitops).
-The release notes below describe compatibility, migration and remaining
-security limitations.
+[![Latest release: v0.4.0](https://img.shields.io/badge/release-v0.4.0-2563eb?style=flat-square)](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0)
+[![Java 21](https://img.shields.io/badge/Java-21-ea580c?style=flat-square)](docs/installation.md)
+[![Apache License 2.0](https://img.shields.io/badge/license-Apache%202.0-475569?style=flat-square)](LICENSE)
 
-Manage Apache Kafka topics and ACLs through a desired state file.
+**[English documentation](docs/release/kafka-gitops-v0.4.0-release-notes-en.md)** ·
+**[Документация на русском](docs/release/kafka-gitops-v0.4.0-release-notes-ru.md)**
 
-<p align="center">
-    <img src="https://i.imgur.com/jnDwYp8.png"/>
-</p>
+An independent community-maintained fork, distributed as one universal Java 21 JAR.
 
 ## Overview
 
-Kafka GitOps is an Apache Kafka resources-as-code tool which allows you to automate the management of your Apache Kafka topics and ACLs from version controlled code. It allows you to define topics and services through the use of a desired state file, much like Terraform and other infrastructure-as-code tools.
+Describe your Kafka topics and services in YAML and keep that desired state in
+version control. Kafka GitOps compares it with the cluster through standard Kafka
+Admin APIs and produces a plan of the required topic, configuration and ACL changes.
 
-Topics and services get defined in a YAML file. When run, `kafka-gitops` compares your desired state to the actual state of the cluster and generates a plan to execute against the cluster. This will make your topics and ACLs match your desired state.
+**Describe → Plan → Review → Apply.** Planning only reads cluster state. Changes
+run through an explicit `apply`, with fresh safety checks for replication
+operations. Service definitions generate ACLs using the existing profiles;
+ACL/DESCRIBE semantics are unchanged.
 
-This tool also generates the needed ACLs for each type of application. There is no need to manually create a bunch of ACLs for Kafka Connect, Kafka Streams, etc. By defining your services, `kafka-gitops` will build the necessary ACLs.
+## What's New in v0.4.0
 
-The tool uses standard Kafka Admin APIs. The verified lab scenarios and
-unverified vendor/security combinations are listed below; managed Kafka and
-Confluent Cloud have not received full integration acceptance for this release.
+Version 0.4.0 builds on the upstream 0.3.1 base:
 
-## Features
+| Area | Changes in this fork |
+|---|---|
+| Runtime and dependencies | Java 21, Kafka Client 4.4.0, Gradle 9.9.1 and Shadow 9.6.1; updated Jackson, logging and compression libraries. |
+| Topics and configurations | Topic creation, config additions/updates/removals and partition increases. |
+| Replication factor | RF increases and explicitly approved decreases, with deterministic replica placement and broker/rack checks. |
+| ELR-aware safety | ISR, ELR and LastKnownELR evidence is checked; missing safety data is never assumed safe. |
+| Plan output | Current and desired values, old/new config values, ordered replica assignments, warnings and blockers. |
+| Apply and verification | Fresh RF preflight, checks between batches, reassignment monitoring and independent completion verification. |
+| Connection diagnostics | Bounded waits and clear configuration, connection and metadata error categories. |
+| Client configuration | `--command-config`, file-over-environment precedence and redaction of sensitive values in diagnostics. |
+| Older Kafka clusters | One JAR with verified Kafka 3.x/4.x scenarios and capability checks for legacy metadata. |
 
-- 🚀  **Built For CI/CD**: Made for CI/CD pipelines to automate the management of topics & ACLs.
-- 🔥  **Configuration as code**: Describe your desired state and manage it from a version-controlled declarative file.
-- 👍  **Easy to use**: Deep knowledge of Kafka administration or ACL management is **NOT** required.
-- ⚡️️  **Plan & Apply**: Generate a read-only plan, review it, then apply changes explicitly.
-- 💻  **Portable**: Uses standard Kafka Admin APIs; tested versions and unverified managed-cluster combinations are listed below.
-- 🦄  **Idempotency**: Executing the same desired state file on an up-to-date cluster will yield the same result.
-- ☀️  **Continue from failures**: If a specific step fails during an apply, you can fix your desired state and re-run the command. You can execute `kafka-gitops` again without needing to rollback any partial successes.
+See the [English release notes](docs/release/kafka-gitops-v0.4.0-release-notes-en.md)
+for dependency versions, migration details and the complete scope of these changes.
 
-## Getting Started
+## Compatibility
 
-Start with the [installation and build instructions](docs/installation.md),
-[quick start](docs/quick-start.md) and [documentation][documentation].
+Earlier integration trials and final smoke tests of the released JAR are separate
+evidence sets:
 
-## Release Notes / Документация релиза
+| Target | Earlier integration trials | Final v0.4.0 JAR smoke tests |
+|---|---|---|
+| Apache Kafka 3.2.3 | **Tested:** topics, configs, partition increases; RF 1 → 2 → 3 → 2 | **Tested:** plan, new topic, RF 1 → 2 |
+| Apache Kafka 3.7.1 | **Tested:** topics, configs, partition increases; RF 1 → 2 → 3 → 2 | **Tested:** plan, new topic, RF 1 → 2 |
+| Apache Kafka 4.4.0 | **Tested:** topics, configs, partition increases; RF 1 → 2 → 3 → 2 and ELR scenarios | **Tested:** plan, new topic, RF 1 → 2 → 3 → 2; ELR remained enabled at level 1 |
+| Arenadata Streaming / ADS 4.3.1 | **NOT TESTED LIVE** | **NOT TESTED LIVE** |
 
-- [Kafka GitOps v0.4.0 — English Release Notes](docs/release/kafka-gitops-v0.4.0-release-notes-en.md)
-- [Kafka GitOps v0.4.0 — описание выпуска на русском языке](docs/release/kafka-gitops-v0.4.0-release-notes-ru.md)
+The final Kafka 3.x smoke tests do not repeat the entire earlier matrix. See
+[earlier integration results](docs/testing/kafka-3x-compatibility-results.md) and
+[final technical acceptance](docs/release/v0.4.0-final-review.md) for exact scopes.
+These results do not establish vendor or production certification. Compatibility
+with old Kafka brokers is not a recommendation for new production deployments.
 
-Both versions cover the final JAR, CLI usage, compatibility, test results and
-security limits. Earlier preparation-status statements in linked documents
-describe their recorded stage; the final release-JAR evidence is summarized here.
+Final acceptance also recorded **1039 Java tests, 26 Python guard tests,
+56 CLI smoke checks and 156 codec/JNI checks — PASS**, separately from live trials.
 
-## Usage
+## Quick Start
 
-Run `kafka-gitops` to view the help output.
+Use an existing local Kafka cluster for this example. It manages a topic, skips
+ACLs and disables deletion. Java 21 is required.
 
-```bash
-Usage: kafka-gitops [-hvV] [--no-delete] [--skip-acls] [--skip-topics] [-c=<file>] [-f=<file>] [COMMAND]
-Manage Kafka resources with a desired state file.
-  -c, --command-config=<file>   Kafka client properties file.
-  -f, --file=<file>   Specify the desired state file.
-  -h, --help          Display this help message.
-      --no-delete     Disable the ability to delete resources.
-      --skip-acls     Do not take ACLs into account during plans or applies.
-      --skip-topics   Do not take topics into account during plans or applies.
-  -v, --verbose       Show more detail during execution.
-  -V, --version       Print the current version of this tool.
-Commands:
-  account   Create Confluent Cloud service accounts.
-  apply     Apply changes to Kafka resources.
-  plan      Generate an execution plan of changes to Kafka resources.
-  validate  Validates the desired state file.
-```
+### 1. Download the JAR
 
-`plan` includes replication-factor changes by default and only reads Kafka state.
-Use `plan --no-manage-replication` to exclude RF changes; the old
-`--manage-replication` flag remains a deprecated compatibility alias. Use
-`plan --help` or `apply --help` for the RF and rack-policy options.
-
-RF decreases are visible in the plan, but applying them requires a fresh
-`apply --allow-replication-decrease`; `--no-delete` forbids decreases even with
-that permission. Apply always rechecks RF safety against fresh metadata. A
-blocked text preview is not exported as executable JSON. See the
-[migration notes and capability limits](docs/design/development-task2-compatibility-rf-ux.md).
-
-## Configuration
-
-Configure Kafka through a standard properties file or environment variables:
-
-```bash
-java -jar build/libs/kafka-gitops-all.jar --command-config client.properties plan -o plan.json
-```
-
-Properties explicitly set in `--command-config` override the corresponding
-environment values. Environment supplies properties absent from the file.
-An unreadable or malformed file fails the command. Set `bootstrap.servers`
-explicitly: there is no implicit `localhost:9092` fallback. Local `validate`
-does not require a Kafka connection.
-
-To configure properties, prefix them with `KAFKA_`. For example:
-
-* `KAFKA_BOOTSTRAP_SERVERS`: Injects as `bootstrap.servers`
-* `KAFKA_CLIENT_ID`: Injects as `client.id`
-
-Additionally, we provide helpers for setting the `sasl.jaas.config` for clusters such as Confluent Cloud.
-
-By setting:
-
-* `KAFKA_SASL_JAAS_USERNAME`: Username to use
-* `KAFKA_SASL_JAAS_PASSWORD`: Password to use
-
-The following configuration is generated:
-
-* `sasl.jaas.config`: `org.apache.kafka.common.security.plain.PlainLoginModule required username="USERNAME" password="PASSWORD";`
-
-## State File
-
-By default, `kafka-gitops` looks for `state.yaml` in the current directory. You can also use `kafka-gitops -f` to pass a file.
-
-An example desired state file:
-
-```yaml
-topics:
-  example-topic:
-    partitions: 6
-    replication: 3
-    configs:
-      cleanup.policy: compact
-
-services:
-  example-service:
-    type: application
-    produces:
-      - example-topic
-    consumes:
-      - example-topic
-```
-
-## Build and run
-
-Use a JDK 21 installation through `JAVA_HOME` or `PATH`, then the Gradle Wrapper
-(Gradle 9.9.1, Shadow 9.6.1). No system Gradle installation is required.
-
-```bash
-./gradlew --no-daemon --no-scan clean classes testClasses test shadowJar verifyReleaseArtifact buildExecutableJar buildRelease
-java -jar build/libs/kafka-gitops-all.jar --version
-java -jar build/libs/kafka-gitops-all.jar --help
-```
-
-On Windows use `.\gradlew.bat` for the same tasks. The first build downloads
-dependencies from their configured repositories. Safe unit tests exclude the
-external-cluster `*IntegrationSpec` suites; they do not start a Kafka lab.
-Outputs are the universal `build/libs/kafka-gitops-all.jar`, POSIX launcher
-`build/output/kafka-gitops`, and `build/distributions/kafka-gitops-0.4.0.zip`.
-The JAR and ZIP contain component-specific licenses and attribution.
-The standard `build`/`assemble` lifecycle uses these same verified artifacts.
-Old thin/shadow distribution and install tasks are disabled; no generated
-launcher references the disabled plain JAR.
-
-For a downloaded release, verify its JAR against the SHA-256 published with
-that exact release, then run it with Java 21:
+Download `kafka-gitops-all.jar` from the
+[latest release, v0.4.0](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0).
+Compare its SHA-256 with the `SHA256SUMS` asset, then check the version:
 
 ```bash
 sha256sum kafka-gitops-all.jar
 java -jar kafka-gitops-all.jar --version
 ```
 
-PowerShell equivalent: `Get-FileHash .\kafka-gitops-all.jar -Algorithm SHA256`.
-Use the independent fork's
-[GitHub Releases](https://github.com/Hellfire-son/kafka-gitops/releases) when
-downloading this build. Upstream Homebrew, container and release downloads do
-not distribute this independent 0.4.0 artifact. The release JAR is 26 018 771 bytes:
+The version should be `0.4.0`. In PowerShell, use
+`Get-FileHash .\kafka-gitops-all.jar -Algorithm SHA256` for the checksum.
 
-```text
-a11deccb969864be1cd30f93cddc4cbbe4f2f395a1f3cc6619400f25f4524f4b  kafka-gitops-all.jar
+### 2. Configure the Kafka client
+
+Create `client.properties` for a local PLAINTEXT lab:
+
+```properties
+bootstrap.servers=127.0.0.1:9092
+security.protocol=PLAINTEXT
 ```
 
-No Kafka environment variables are mandatory when `--command-config` supplies
-the required client settings. Keep credentials outside Git. See
-[SECURITY.md](SECURITY.md) before using authentication settings or applying changes.
+For other environments, set the actual bootstrap addresses and required security
+properties. Keep credentials outside Git. `--command-config` can provide all
+required Kafka settings; no `KAFKA_*` environment variables are mandatory.
+Explicit file values override corresponding environment values.
 
-## Compatibility and safety limits
+### 3. Describe the desired state
 
-| Target | Earlier integration trials | Final v0.4.0 JAR acceptance, 2026-11-14 |
-|---|---|---|
-| Apache Kafka 3.2.3 | PASS: topics/configs/partition increases and RF 1→2→3→2 | PASS: plan, new test topic, RF 1→2 |
-| Apache Kafka 3.7.1 | PASS: topics/configs/partition increases and RF 1→2→3→2 | PASS: plan, new test topic, RF 1→2 |
-| Apache Kafka 4.4.0 | PASS: topics/configs/partition increases and RF 1→2→3→2; ELR trials | PASS: plan, new test topic, RF 1→2→3→2; ELR remained enabled at level 1 |
-| Arenadata Streaming / ADS 4.3.1 | **NOT TESTED LIVE** | **NOT TESTED LIVE**; no vendor compatibility claim |
+Save this as `state.yaml`, the default desired-state filename:
 
-The [earlier integration results](docs/testing/kafka-3x-compatibility-results.md)
-and [final technical review](docs/release/v0.4.0-final-review.md) describe different
-artifacts and test scopes. The final review tested the exact release JAR identified
-above; its Kafka 3.x checks do not repeat the full earlier integration matrix.
-Final recorded checks: **1039 Java tests, 26 Python guard tests, 56 CLI smoke
-checks and 156 codec/JNI checks — PASS**, separately from the live trials.
-Existing ACL/DESCRIBE semantics are unchanged.
-Full SASL/TLS/Kerberos/OAuth and ACL enforcement coverage is not established.
-Production readiness, every OS/CPU and all failure/load scenarios are not claimed.
-An updated client does not patch vulnerabilities in old brokers.
-Kafka 3.x compatibility is not a recommendation for new production deployments.
+```yaml
+topics:
+  example-topic:
+    partitions: 3
+    replication: 1
+    configs:
+      cleanup.policy: compact
+```
 
-`plan` reads and reports changes; only an explicit `apply` performs changes.
-Review RF decreases and fresh preflight blockers. ELR/LastKnownELR unknown data
-is not converted to an empty set; unsupported/unknown safety evidence blocks
-unsafe RF execution. See [ELR details](docs/design/elr-replication-compatibility.md).
+### 4. Validate locally
 
-## Contributing
+```bash
+java -jar kafka-gitops-all.jar -f state.yaml validate
+```
 
-Contributions are very welcome. See [CONTRIBUTING.md][contributing] for details.
+Validation checks the desired-state file without connecting to Kafka.
 
-## License
+### 5. Generate and review a plan
 
-Copyright (c) 2020 Shawn Seymour.
+```bash
+java -jar kafka-gitops-all.jar --command-config client.properties --skip-acls --no-delete plan -o plan.json
+```
 
-Licensed under the [Apache 2.0 license][license].
+**`plan` is read-only.** `--skip-acls` limits this example to topics, and
+`--no-delete` forbids deletions and RF decreases. Review the proposed changes
+and require a successful exit code before continuing. A blocked plan preserves
+any older output file; do not use that file as the result of a failed run.
 
-[documentation]: ./docs/documentation.md
-[contributing]: ./CONTRIBUTING.md
-[license]: ./LICENSE
+### 6. Apply the reviewed plan
+
+```bash
+java -jar kafka-gitops-all.jar --command-config client.properties --skip-acls --no-delete apply -p plan.json
+```
+
+**`apply` explicitly changes Kafka.** It rechecks RF safety against fresh
+metadata. A failure can leave partial changes; there is no automatic rollback.
+For command options, use `java -jar kafka-gitops-all.jar plan --help` or
+`java -jar kafka-gitops-all.jar apply --help`.
+
+## Replication Management
+
+RF drift is included in `plan` by default. For the same metadata, target RF and
+rack policy, planning produces deterministic ordered replica assignments.
+
+| Option | Behavior |
+|---|---|
+| `plan --no-manage-replication` | Exclude RF changes from the plan. |
+| `apply --no-manage-replication` | Reject a saved plan containing RF operations before any writes. |
+| `apply --allow-replication-decrease` | Permit an intended RF decrease only after fresh safety checks. Permission is not inherited from `plan` or saved JSON. |
+| Global `--no-delete` | Forbid RF decreases even when decrease permission is present. |
+
+RF decreases appear in a plan without prior approval. To execute one, use the
+separate apply permission above without `--no-delete`; the Quick Start retains
+that guard. `--manage-replication` remains a deprecated compatibility alias.
+
+Fresh checks cover cluster/topic identity, assignments, broker/rack metadata,
+leader and full ISR, `min.insync.replicas`, and conflicting reassignments. With
+ELR enabled at supported level 1, ELR and LastKnownELR must be known and empty.
+Critical unknown or unsafe evidence blocks execution. Older Kafka requires
+positive evidence of non-applicability when those fields are unavailable.
+
+Completion requires exact target assignments, full target ISR and no active
+reassignment; an acknowledgement alone is insufficient. See
+[replication and ELR details](docs/design/elr-replication-compatibility.md).
+
+## Downloads and Documentation
+
+| Resource | Purpose |
+|---|---|
+| [Latest release: v0.4.0](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0) | Universal JAR, EN/RU release-note assets and `SHA256SUMS`. |
+| [English Release Notes](docs/release/kafka-gitops-v0.4.0-release-notes-en.md) | Complete v0.4.0 features, compatibility, usage and test evidence. |
+| [Документация на русском](docs/release/kafka-gitops-v0.4.0-release-notes-ru.md) | Полное описание v0.4.0 на русском языке. |
+| [Installation and source build](docs/installation.md) | Java requirements, Gradle Wrapper and build instructions. |
+| [CHANGELOG](CHANGELOG.md) | Change history and migration from 0.3.1. |
+| [SECURITY](SECURITY.md) | Security policy, reporting guidance and dependency-risk boundaries. |
+| [CONTRIBUTING](CONTRIBUTING.md) | Contribution and review guidelines. |
+
+For final release status and live-test coverage, use the EN/RU release notes and
+final acceptance report linked above. Older preparation-status statements in
+other documents describe their recorded stage.
+
+## Known Limitations
+
+- ADS 4.3.1 has not been tested on a real cluster; vendor-specific features and
+  policies remain unverified.
+- The full SASL/TLS/Kerberos/OAuth integration matrix, managed Kafka/Confluent
+  Cloud and ACL enforcement acceptance are incomplete.
+- No production certification or complete native OS/CPU coverage is claimed.
+  Large data volumes, sustained load, broker failures and recovery need more tests.
+- Partition decreases and RF execution with nonempty ELR/LastKnownELR are
+  unsupported. Preflight and writes are not an atomic Kafka transaction.
+- Documented Gradle build-tool advisories are separate from runtime JAR
+  dependencies; see the [security policy](SECURITY.md).
+
+## Project Origin and License
+
+This is an independent community-maintained continuation of
+[joschi/kafka-gitops 0.3.1](https://github.com/joschi/kafka-gitops).
+The original project is [devshawn/kafka-gitops](https://github.com/devshawn/kafka-gitops),
+created by **Shawn Seymour**. See [provenance and modifications](CHANGES-FROM-UPSTREAM.md).
+
+Copyright (c) 2020 Shawn Seymour. Licensed under the [Apache License 2.0](LICENSE).
+Bundled components retain their own licenses and attribution; see the
+[third-party notices](legal/THIRD-PARTY-NOTICES).
+
+This fork is not endorsed or officially supported by the Apache Software
+Foundation, Arenadata, Confluent, or the original maintainers.
