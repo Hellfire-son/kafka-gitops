@@ -1,118 +1,110 @@
-# Confluent Cloud
+<!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
+# Confluent Cloud and legacy account integration
 
-This tool was designed to work with Confluent Cloud. It can manage service accounts, topics, and ACLs for Confluent Cloud clusters.
+Kafka GitOps 0.4.0 uses Kafka Admin APIs for topic/configuration and ACL operations.
+**Confluent Cloud, its full security matrix and ACL enforcement have not received
+complete live integration acceptance for this release.** The isolated Apache
+Kafka trials are not evidence of vendor certification.
 
-## Getting Started
+Install the Java 21 [universal JAR](installation.md) from the
+[v0.4.0 release](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0).
+Upstream Docker images are not the independent v0.4.0 distribution.
 
-Ensure you have installed `kafka-gitops` or are using the `kafka-gitops` docker image as described in the [installation][installation] instructions.
+## Kafka client configuration
 
-You must have the `ccloud` command line tools installed if you wish to auto-populate the `principal` fields on services.
+Use a private `client.properties`. This template contains only non-secret
+settings and a placeholder bootstrap address:
 
-## Desired State File
+```properties
+bootstrap.servers=broker.example.invalid:9092
+security.protocol=SASL_SSL
+sasl.mechanism=PLAIN
+ssl.endpoint.identification.algorithm=HTTPS
+```
 
-Create a basic desired state file, `state.yaml`, such as:
+Replace the placeholder and supply the required authentication properties,
+including `sasl.jaas.config` when required, through your approved private
+credential configuration. The template is incomplete until those properties
+are provided. Do not commit API keys, secrets or private client properties.
+
+Use `--command-config client.properties`; no Kafka environment variables are
+mandatory when the file supplies all required settings. File values override
+corresponding environment properties. This documents configuration handling,
+not a verified Confluent Cloud authentication recipe.
+
+## Explicit principals
+
+With explicitly provisioned principals, leave `settings.ccloud.enabled` unset
+or false and use the normal [service definitions](services.md). For example,
+replace `User:REPLACE_WITH_ACCOUNT_ID` with a principal valid for your environment:
 
 ```yaml
-settings:
-  ccloud:
-    enabled: true
-
 topics:
-  test-topic:
-    partitions: 6
+  example-topic:
+    partitions: 3
     replication: 3
 
 services:
-  test-service:
+  example-service:
     type: application
+    principal: User:REPLACE_WITH_ACCOUNT_ID
     produces:
-      - test-topic
+      - example-topic
 ```
 
-To give an overview, throughout this guide, this will create:
+The application profile generates a topic WRITE ACL; additional topic DESCRIBE
+is opt-in. Review the generated ACLs against your actual authorizer and account
+permissions. Managed services may restrict RF changes or broker metadata APIs;
+missing critical evidence still blocks RF execution. Deliberately excluding RF
+requires `plan --no-manage-replication`, not a safety bypass.
 
-- A topic named `test-topic`
-- A service account named `test-service`
-- An `WRITE` ACL for topic `test-topic` tied to the service account `test-service`
+## Validate, plan, review, apply
 
-## Configuration
-
-To use `kafka-gitops` with Confluent Cloud, you'll need to set a few environment variables.
-
-* `KAFKA_BOOTSTRAP_SERVERS`: Your Confluent Cloud cluster URL
-* `KAFKA_SASL_JAAS_USERNAME`: Your Confluent Cloud API key
-* `KAFKA_SASL_JAAS_PASSWORD`: Your Confluent Cloud API secret
-* `KAFKA_SECURITY_PROTOCOL`: `SASL_SSL`
-* `KAFKA_SASL_MECHANISM`: `PLAIN`
-* `KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM`: `HTTPS`
-
-Additionally, you'll need to login to the `ccloud` tool. You can automate this by setting the following environment variables:
-
-* `XX_CCLOUD_EMAIL`: Your Confluent Cloud administrator email
-* `XX_CCLOUD_PASSWORD`: Your Confluent Cloud administrator password
-
-Then, you can run `ccloud login` and it will run without a prompt. This is great for CI builds.
-
-You can optionally specify a path to a `ccloud` executable:
-
-* `CCLOUD_EXECUTABLE_PATH`: `/full/path/to/ccloud`
-
-Otherwise, `ccloud` must be on your path.
-
-## Validate
-
-First, validate your state file is correct by running:
+Save the desired state as `state.yaml`. Validate without a connection:
 
 ```bash
-kafka-gitops -f state.yaml validate
+java -jar kafka-gitops-all.jar -f state.yaml validate
 ```
 
-An example success message would look like:
-
-```text
-[VALID] Successfully validated the desired state file.
-```
-
-## Accounts
-
-Before generating an execution plan, you will need to create the service accounts. This can be done by running:
+After configuring and separately accepting the target environment, generate a
+read-only plan with deletion disabled:
 
 ```bash
-kafka-gitops -f state.yaml account
+java -jar kafka-gitops-all.jar --command-config client.properties --no-delete -f state.yaml plan -o plan.json
 ```
 
-This currently only creates service accounts; it will not delete any.
-
-## Plan
-
-We're now ready to generate a plan to execute against the cluster. By using the plan command, we are **NOT** changing the cluster.
-
-Generate a plan by running:
+Check the exit code and every topic/ACL operation before explicitly applying:
 
 ```bash
-kafka-gitops -f state.yaml plan -o plan.json
+java -jar kafka-gitops-all.jar --command-config client.properties --no-delete apply -p plan.json
 ```
 
-This will generate an execution plan to run against the cluster and save the output to `plan.json`. 
+> **Warning:** Apply changes Kafka and may partially complete. Without
+> `--no-delete`, resources omitted from desired state may be deleted. A blocked
+> plan does not replace an older JSON file. No automatic rollback is provided.
 
-The command will also pretty-print what changes it wants to make to the cluster. 
+## Legacy ccloud account integration
 
-## Apply
+Setting `settings.ccloud.enabled: true` selects the existing external `ccloud`
+principal-resolution path. Omit service/user principals only when deliberately
+using this path. Kafka GitOps invokes `ccloud service-account list -o json` and,
+for account creation, `ccloud service-account create ... -o json`. The executable
+is selected by `CCLOUD_EXECUTABLE_PATH`, or the command `ccloud` on `PATH`.
 
-To execute a plan against the cluster, we use the apply command.
-
-!> **WARNING**: This will apply changes to the cluster. This can be potentially destructive if you do not have all topics and ACLs defined.
-
-By default, the apply command will generate a plan and then apply it. For most situations, **you should output a plan file from the plan command and pass it to the apply command**.
-
-Example:
+The GitOps subcommand is **`account`**, singular:
 
 ```bash
-kafka-gitops -f state.yaml apply -p plan.json
+java -jar kafka-gitops-all.jar -f state.yaml account
 ```
 
-Congrats! You're now using `kafka-gitops` to manage your Confluent Cloud cluster. Once you've practiced locally, you should commit your state file to a repository and create CI/CD pipelines to create plans and execute them against the cluster. 
+This is a separate account-creation action, not a read-only planning step. The
+external CLI's current syntax, login and response-format compatibility have not
+been verified for this release. Do not assume a modern `confluent` CLI can simply
+replace `ccloud`, or rely on the former password-based CI login examples. Before
+using this legacy path, establish a compatible CLI and private authentication in
+a separately authorized acceptance environment.
 
-Welcome to GitOps! 
-
-[installation]: /installation.md
+See the [legacy example fragments](../examples/confluent-cloud/README.md),
+[permissions](permissions.md), [specification](specification.md) and
+[security policy](../SECURITY.md). No account or Kafka operations are run by
+reading or locally validating these examples.

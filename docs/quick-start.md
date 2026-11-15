@@ -1,190 +1,138 @@
 <!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
 # Quick Start
 
-Getting started with `kafka-gitops` is simple. For this tutorial, we will assume:
+This walkthrough uses Kafka GitOps **0.4.0**, **Java 21** and an existing local
+Kafka cluster. It creates or updates a sample topic with ACL management skipped
+and deletion disabled. Use a non-production cluster and review the actual plan.
 
-- You have installed the `kafka-gitops` command as [described here](/installation.md).
-- You have a kafka cluster running on `localhost:9092`. 
+## 1. Download the JAR
 
-!> **NOTE**: If you desire to use this with Confluent Cloud, read our [Confluent Cloud page][ccloud].
+Download `kafka-gitops-all.jar` from the
+[v0.4.0 release](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0).
+Verify its SHA-256 using [installation instructions](installation.md), then run:
 
-## Desired State File
+```bash
+java -jar kafka-gitops-all.jar --version
+```
 
-First, create a desired state file named `state.yaml`. In this file, we'll define a topic. To showcase how to set topic configs, we'll make it a compacted topic.
+The version must be `0.4.0`. A separate `kafka-gitops` launcher installation is
+not required. See the [English](release/kafka-gitops-v0.4.0-release-notes-en.md) /
+[Russian](release/kafka-gitops-v0.4.0-release-notes-ru.md) notes for compatibility.
+
+## 2. Prepare client.properties
+
+For a disposable local PLAINTEXT lab, create `client.properties`:
+
+```properties
+bootstrap.servers=127.0.0.1:9092
+security.protocol=PLAINTEXT
+```
+
+Set the actual bootstrap and required security properties for other environments.
+Keep credentials outside Git. `--command-config` can supply all required Kafka
+properties; `KAFKA_*` environment variables are optional. Explicit file values
+override corresponding environment values. There is no implicit bootstrap server.
+See [permissions](permissions.md) before using authenticated clusters.
+
+## 3. Create the desired state
+
+Create `state.yaml` in the working directory:
 
 ```yaml
 topics:
-  my-example-topic:
-    partitions: 6
+  example-topic:
+    partitions: 3
     replication: 1
     configs:
       cleanup.policy: compact
 ```
 
-## Configuration
+`state.yaml` is the default filename; root option `-f` selects another file.
+See the [desired-state specification](specification.md) and [services](services.md)
+for additional topics, service definitions and ACLs. Confluent Cloud acceptance
+and its legacy account integration are discussed separately in
+[Confluent Cloud](confluent-cloud.md).
 
-Configure `kafka-gitops` through a Kafka client properties file or environment variables.
-Properties explicitly present in `--command-config` override environment values;
-environment fills properties absent from the file. An unreadable or malformed file
-fails the command. There is no implicit bootstrap server.
-
-For example, create `client.properties` containing `bootstrap.servers=localhost:9092`:
-
-```bash
-kafka-gitops --command-config client.properties plan -o plan.json
-```
-
-To configure properties through environment, prefix them with `KAFKA_`. For example:
-
-* `KAFKA_BOOTSTRAP_SERVERS`: Injects as `bootstrap.servers`
-* `KAFKA_CLIENT_ID`: Injects as `client.id`
-
-For our quick start example, open a terminal where your `state.yaml` file is located and set the bootstrap servers:
+## 4. Validate locally
 
 ```bash
-export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+java -jar kafka-gitops-all.jar -f state.yaml validate
 ```
 
-!> **NOTE**: If running `kafka-gitops` against a secured Kafka cluster, it must be run with super user credentials or a user with special ACLs. [Read more on our permissions page][permissions].
+This parses and validates the YAML without connecting to Kafka. Successful
+validation returns exit code 0; invalid input returns a nonzero exit code.
+It does not prove authorization, broker availability or sufficient RF capacity.
 
-## Validate
-We can validate the desired state file conforms to the [specification][specification]. To do this, run:
+## 5. Generate a read-only plan
 
 ```bash
-kafka-gitops validate
+java -jar kafka-gitops-all.jar --command-config client.properties --skip-acls --no-delete -f state.yaml plan -o plan.json
 ```
 
-By default, it will look for `state.yaml` in the current directory. To specify a different file name, run:
+**`plan` only reads Kafka state; it never applies changes.** This example uses
+`--skip-acls` to manage topics only. Global `--no-delete` disables deletion and
+forbids RF decreases. Existing topics with the same names can still be updated.
+
+The text report shows actual/desired values, proposed replica assignments,
+config changes, warnings and blockers. Executable operations are saved as JSON
+only when planning succeeds. A blocked plan returns exit code 2 and leaves an
+existing output file untouched. Exit code 0 covers `PLAN_BUILT` and `NO_CHANGES`.
+
+## 6. Review before applying
+
+- Confirm the target cluster and every resource in the plan. This walkthrough
+  should contain only the intended topic operations and no ACL operations.
+- Review old/new configuration values, partition counts and RF assignments.
+  Resolve critical `UNKNOWN` evidence and blockers; assess operational warnings.
+- Require a successful planning exit code. Do not apply an older JSON file as
+  the output of a failed run. A saved RF plan still needs fresh apply checks.
+
+## 7. Apply the reviewed plan explicitly
+
+> **Warning:** `apply` changes Kafka. Without the example's guards, desired-state
+> reconciliation can delete resources omitted from the state file. A failed apply
+> can leave partial changes; there is no automatic rollback.
 
 ```bash
-kafka-gitops -f my-state-file.yaml validate
+java -jar kafka-gitops-all.jar --command-config client.properties --skip-acls --no-delete apply -p plan.json
 ```
 
-An example success message would look like:
+RF apply rechecks permissions, cluster/topic identity, assignments, broker/rack
+health, leader/ISR, `min.insync.replicas`, ELR evidence and conflicting reassignments.
+Success requires completed reassignment and independent verification, not just
+an acknowledgement. Re-plan after completion or after investigating a failure.
 
-```text
-[VALID] Successfully validated the desired state file.
-```
+## Replication options
 
-## Plan
+RF drift is included in `plan` by default, including proposed decreases.
 
-We're now ready to generate a plan to execute against the cluster. By using the plan command, we are **NOT** changing the cluster.
+| Option | Meaning |
+|---|---|
+| `plan --no-manage-replication` | Exclude RF operations. |
+| `apply --no-manage-replication` | Reject saved RF operations before any writes. |
+| `apply --allow-replication-decrease` | Independently authorize an intended decrease after fresh checks. |
+| Global `--no-delete` | Forbid RF decreases even with decrease permission. |
 
-Generate a plan by running:
+The old `--manage-replication` flag remains a deprecated compatibility alias;
+opposite flags conflict. `plan --allow-replication-decrease` is only a compatibility
+option and does not authorize apply. Partition decreases are unsupported.
+
+Only for a separately reviewed RF decrease, without `--no-delete`:
 
 ```bash
-kafka-gitops plan
+java -jar kafka-gitops-all.jar --command-config client.properties --skip-acls apply -p reviewed-decrease.json --allow-replication-decrease
 ```
 
-For a newly created topic, an abbreviated text plan looks like:
+`RACK_AWARE` is the default placement policy. The plan option
+`--replication-rack-policy BROKER_ONLY` explicitly accepts loss of rack protection;
+it does not waive the remaining checks. With ELR enabled, both ELR and LastKnownELR
+must be known and empty; critical unknowns block RF execution. See
+[ELR/RF design](design/elr-replication-compatibility.md) and the release notes.
 
-
-```text
-[CONFIG] Loading Kafka properties ...
-[CONNECT] Connecting to the explicitly configured Kafka bootstrap servers ...
-[METADATA] Reading Kafka resource and broker metadata ...
-[PLAN] Calculating and summarizing changes ...
-[PLAN] Topic: my-example-topic
-  Partitions: ABSENT -> 6
-  Replication: ABSENT -> 1
-  Config cleanup.policy: ABSENT -> compact
-[SUMMARY]
-  Proposed executable resource changes: 1
-  Status: PLAN_BUILT
-  Ready for apply: FRESH_PREFLIGHT_REQUIRED
-```
-
-RF is managed by default for existing topics too. To retain the earlier behavior
-of ignoring RF drift, use `kafka-gitops plan --no-manage-replication`. The old
-`--manage-replication` remains a deprecated alias. Opposite flags together fail.
-Use `plan --help` to inspect placement options. `RACK_AWARE` is the default;
-`--replication-rack-policy BROKER_ONLY` explicitly accepts the rack-protection risk.
-
-Existing topics show current and proposed ordered replicas, broker/rack facts
-and reasons for exclusion. Unknown values are printed as `UNKNOWN`. Warnings
-describe extra operational risks; critical unknowns and unsafe conditions make
-the status `PLAN_BLOCKED`, return exit code 2 and prevent JSON export. Known
-changes remain visible. Exit code 0 covers `NO_CHANGES` and `PLAN_BUILT`.
-
-In most cases, you will want to output the plan to a file which can then be passed to the apply command. Plan files are `JSON` files. This can be done by running:
+## Inspect CLI help
 
 ```bash
-kafka-gitops plan -o plan.json
+java -jar kafka-gitops-all.jar --help
+java -jar kafka-gitops-all.jar plan --help
+java -jar kafka-gitops-all.jar apply --help
 ```
-
-If running against a Kafka cluster with no authorizer configured or if you simply want to only manage topics, you can ignore ACLs completely. This can be done by running:
-
-```bash
-kafka-gitops --skip-acls plan
-```
-
-Conversely, if you're only interested in managing ACLs you can ignore changes to topics completely. This can be done by running:
-
-```bash
-kafka-gitops --skip-topics plan
-```
-
-## Apply
-
-To execute a plan against the cluster, we use the apply command.
-
-!> **WARNING**: This will apply changes to the cluster. This can be potentially destructive if you do not have all topics and ACLs defined.
-
-Run:
-
-```bash
-kafka-gitops apply
-```
-
-By default, the apply command will generate a plan and then apply it. For most situations, **you should output a plan file from the plan command and pass it to the apply command**.
-
-Example:
-
-```bash
-kafka-gitops apply -p plan.json
-```
-
-An RF decrease appears in `plan` without prior permission, but execution requires
-`kafka-gitops apply -p plan.json --allow-replication-decrease`. Global `--no-delete`
-forbids the decrease even with this permission. Permissions are never saved in
-JSON. Applying an RF plan with `--no-manage-replication` fails before any writes,
-including when both resource categories are skipped. Every RF apply performs
-fresh identity, assignment, leader/ISR, min ISR, broker and conflict checks and
-observes completion before reporting success. No automatic rollback occurs.
-
-Automation that previously ignored RF drift should explicitly opt out when
-planning. Text output has changed; use JSON for machine input and check the exit
-code before reusing an output file. A blocked plan preserves any existing file;
-an older file must not be treated as the output of a failed command. See the
-[compatibility report](design/development-task2-compatibility-rf-ux.md) for examples
-and the limits of unit-only compatibility evidence.
-
-An output of a successful apply would look like:
-
-```text
-Executing apply...
-
-Applying: [CREATE]
-
-+ [TOPIC] my-example-topic
-	+ cleanup.policy: compact
-
-Successfully applied.
-
-[SUCCESS] Apply complete! Resources: 1 created, 0 updated, 0 deleted.
-```
-
-If there is a partial failure, successes will not be rolled back. A failure error would look something like:
-
-```text
-[ERROR] KAFKA_ERROR: Creating a Kafka topic
-State: KAFKA_ERROR. Failure type: PolicyViolationException.
-External exception text omitted. Verify Kafka state before retrying; changes may be partially applied.
-```
-
-Congrats! You've successfully started using GitOps strategies to manage your cluster. If you have security on your cluster, read the [services][services] page to start defining services. 
-
-[ccloud]: /confluent-cloud.md
-[permissions]: /permissions.md
-[specification]: /specification.md
-[services]: /services.md

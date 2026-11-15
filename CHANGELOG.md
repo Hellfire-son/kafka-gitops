@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Changelog
 
-## 0.4.0 — prepared, not yet published
+## [0.4.0](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0) — 2026-11-15
 
 Independent continuation of joschi/kafka-gitops 0.3.1, originally created by
 Shawn Seymour as devshawn/kafka-gitops. The original Apache-2.0 license,
@@ -32,16 +32,27 @@ Planning does not apply changes. Partition decreases remain unsupported.
 
 ### Evidence and limitations
 
-The preceding artifact passed isolated Apache Kafka 3.2.3, 3.7.1 and 4.4.0
-topic/config/partition and RF 1→2→3→2 trials. Those trials were not repeated on
-the newly packaged 0.4.0 binary. ADS 4.3.1 is NOT TESTED LIVE; full
-SASL/TLS/Kerberos/ACL enforcement and production readiness are not claimed.
+Earlier isolated integration trials covered topics, configs, partition increases
+and RF 1→2→3→2 on Apache Kafka 3.2.3, 3.7.1 and 4.4.0 using the preceding artifact.
+The final release JAR then passed separate live smoke tests on 2026-11-14:
+
+- Kafka 3.2.3: plan, test topic creation and RF 1→2.
+- Kafka 3.7.1: plan, test topic creation and RF 1→2.
+- Kafka 4.4.0: plan, test topic creation and RF 1→2→3→2 with ELR enabled at level 1.
+
+The final Kafka 3.x smoke tests do not repeat the whole earlier integration matrix.
+Final verification also recorded 1039 Java tests, 26 Python guard tests,
+56 CLI smoke checks and 156 codec/JNI checks — PASS, separately from live trials.
+ADS 4.3.1 is NOT TESTED LIVE; full SASL/TLS/Kerberos/OAuth and ACL enforcement
+acceptance remain incomplete. Production certification is not claimed.
 Known Guava/Jackson findings inside Gradle are separate from runtime JAR
 dependencies. Old Kafka brokers require their own security review.
 
-See [release notes](docs/release/v0.4.0-release-notes.md),
-[preparation evidence](docs/release/v0.4.0-release-preparation.md) and
-[security policy](SECURITY.md).
+See [English Release Notes](docs/release/kafka-gitops-v0.4.0-release-notes-en.md),
+[описание выпуска на русском](docs/release/kafka-gitops-v0.4.0-release-notes-ru.md),
+[final acceptance](docs/release/v0.4.0-final-review.md),
+[historical preparation evidence](docs/release/v0.4.0-release-preparation.md)
+and [security policy](SECURITY.md).
 
 ## 0.3.1 — upstream base
 

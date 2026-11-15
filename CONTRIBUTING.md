@@ -1,33 +1,65 @@
 <!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
 # Contributing
 
-This is an independent community-maintained fork of joschi/kafka-gitops 0.3.1,
-originally created by Shawn Seymour. The new fork URL has not been assigned.
-Use the owner's confirmed repository after publication; do not direct new-fork
-issues or pull requests to upstream maintainers by default.
+Contribute to [Hellfire-son/kafka-gitops](https://github.com/Hellfire-son/kafka-gitops),
+the independent community-maintained fork based on joschi/kafka-gitops 0.3.1.
+The original project was created by Shawn Seymour. Fork-specific bugs and
+proposals belong here; do not direct them to upstream maintainers by default.
 
-## Feature Requests & Bug Reports
-Use the issue tracker designated by the owner after the fork is published.
-For security reports follow [SECURITY.md](SECURITY.md); no private reporting
-address is invented here.
+## Issues and discussion
 
-## Pull Requests
-Base changes on the confirmed independent repository. Preserve upstream
-copyright, license and provenance. Mark modified upstream files and retain
-component-specific legal texts when changing runtime dependencies.
+Use this fork's [Issues](https://github.com/Hellfire-son/kafka-gitops/issues) for
+non-security bugs and proposals when the tracker is enabled.
 
-1. Discuss your proposed change in a GitHub issue first before spending time and implementing a feature or fix.
+**Repository setting checked on 2026-11-15: Issues are disabled.** The owner must
+enable Issues to support the issue-first workflow below. Until then, use a
+[draft Pull Request](https://github.com/Hellfire-son/kafka-gitops/pulls) for public
+scope discussion. Do not publish secrets or undisclosed vulnerability details;
+use the private channel in [SECURITY.md](SECURITY.md).
 
-2. Ensure all changes are relevant to the pull request. Keep pull requests as small and to-the-point as possible.
+## Contribution workflow
 
-3. Add & modify tests as necessary. Also, ensure the code matches the existing style.
+1. Once Issues are enabled, open an Issue describing the problem or proposal,
+   affected version and a sanitized reproduction. While disabled, provide that
+   context in a draft PR instead.
+2. Discuss substantial behavior, compatibility or security changes before
+   implementing them.
+3. Create a separate feature branch in your working clone or a personal fork
+   if you do not have write access.
+4. Make focused changes and explain the resulting behavior. Preserve compatible
+   YAML/JSON formats and documented RF/ACL behavior unless a change is agreed.
+5. Add or update tests that verify changed behavior. Documentation-only changes
+   need appropriate link, example and rendering checks.
+6. Run the safe checks below and inspect `git diff --check` and the changed paths.
+7. Open a [Pull Request](https://github.com/Hellfire-son/kafka-gitops/pulls) targeting
+   **`main` in `Hellfire-son/kafka-gitops`**. Describe the problem, resulting
+   behavior, validation and remaining limitations; link the Issue when available.
 
-4. Build with JDK 21 and the Gradle Wrapper using the safe commands in
-   [installation](docs/installation.md). Run offline integration-runner guards
-   and final-JAR CLI/JNI checks. External-cluster IntegrationSpec suites and
-   lab write runners require separate authorization and are not automatic CI.
-5. Open a pull request against the confirmed fork's main branch after publication.
+The default branch was verified as `main`. These are contribution guidelines,
+not a claim that GitHub branch protection enforces particular review rules.
 
+## Requirements and safe checks
 
-Original project: [devshawn/kafka-gitops](https://github.com/devshawn/kafka-gitops).
-Immediate base: [joschi/kafka-gitops](https://github.com/joschi/kafka-gitops).
+- Use **JDK 21** and the checked-in **Gradle Wrapper 9.9.1**; the build uses
+  Shadow 9.6.1 and Kafka Client 4.4.0. No system Gradle installation is needed.
+- Follow [installation and build](docs/installation.md#build-from-source) for safe
+  Java unit tests, offline Python guards and packaged-JAR CLI/JNI verification.
+- The Java test task excludes external-cluster `*IntegrationSpec` suites.
+  Docker/Kafka integration runners, external accounts and cluster writes need
+  separate acceptance authorization; they are not automatic unit-test steps.
+- For documentation, check relative links, GitHub-compatible Markdown, YAML and
+  CLI examples. Use local `validate`, `--help` and `--version` when sufficient.
+- Do not include real client properties, credentials, tokens, keytabs, private
+  keys, private paths, raw logs or unredacted scanner reports in Issues or PRs.
+  If a secret was exposed, revoke/rotate it; deleting a file does not erase history.
+
+## Licensing and attribution
+
+Preserve the project Apache License 2.0, upstream copyright, modification notices
+and third-party legal texts. Dependency or packaging changes require a fresh
+review of their exact licenses and source-availability obligations. See
+[provenance](CHANGES-FROM-UPSTREAM.md) and [third-party licensing](legal/README.md).
+
+Original project: [devshawn/kafka-gitops](https://github.com/devshawn/kafka-gitops),
+created by Shawn Seymour. Immediate base:
+[joschi/kafka-gitops](https://github.com/joschi/kafka-gitops).

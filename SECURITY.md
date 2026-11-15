@@ -1,19 +1,25 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Security policy and limitations
 
-This is an independent community-maintained fork. No vendor security support,
-response SLA or production certification is claimed. Version 0.4.0 is being
-prepared and has not been published in a new GitHub fork yet.
+This is the independent community-maintained
+[Hellfire-son/kafka-gitops](https://github.com/Hellfire-son/kafka-gitops) fork.
+[Version 0.4.0 is published](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0).
+No vendor security support, response SLA or production certification is claimed.
 
 ## Reporting a vulnerability
 
-No private contact or advisory URL has been designated for the future fork.
-Until the owner publishes a verified private reporting channel, do not post
-credentials, private infrastructure details or an exploitable proof of concept
-in a public issue. Use an already established private channel to the project
-owner, if one exists, and provide only a sanitized description initially.
-The owner must publish the reporting destination before accepting private reports.
-Do not infer a contact address from upstream authors or their Git history.
+Use GitHub's private
+[Report a vulnerability form](https://github.com/Hellfire-son/kafka-gitops/security/advisories/new).
+GitHub sign-in is required. Private Vulnerability Reporting was confirmed enabled
+on 2026-11-15 through the repository API and the Report a vulnerability button on
+its [Security page](https://github.com/Hellfire-son/kafka-gitops/security).
+
+Include the affected version, a sanitized reproduction, impact and relevant
+configuration without working credentials. Do not use public Issues or PRs for
+secrets, private infrastructure details or undisclosed vulnerability details.
+If the private form becomes unavailable, the owner must verify the setting and
+publish a confirmed private alternative before sensitive reports are sent.
+No personal email address or upstream security contact is designated here.
 
 An exposed working credential must be revoked/rotated. Removing it from the
 current file or redacting a report does not remove it from history, releases
@@ -22,9 +28,14 @@ or logs. History changes require a separate decision; automated cleanup is not p
 ## Scope of verification
 
 - Java 21 and one Kafka Client 4.4.0 universal JAR.
-- Isolated live evidence exists for the preceding artifact against Apache Kafka
-  3.2.3, 3.7.1 and 4.4.0. Release 0.4.0 packaging has separate unit/CLI/artifact
-  evidence; old live results must not be attributed to its new hash.
+- Earlier integration tests on the preceding artifact covered topics, configs,
+  partition increases and RF 1→2→3→2 on Kafka 3.2.3, 3.7.1 and 4.4.0.
+- The final v0.4.0 JAR passed separate live smoke tests on 2026-11-14:
+  Kafka 3.2.3/3.7.1 — plan, new topic and RF 1→2; Kafka 4.4.0 — plan, new topic
+  and RF 1→2→3→2 with ELR enabled at level 1. This does not repeat the entire
+  earlier matrix. See [final technical acceptance](docs/release/v0.4.0-final-review.md)
+  and the [English](docs/release/kafka-gitops-v0.4.0-release-notes-en.md) /
+  [Russian](docs/release/kafka-gitops-v0.4.0-release-notes-ru.md) release notes.
 - ADS 4.3.1 is NOT TESTED LIVE. Full SASL/TLS/Kerberos/OAuth/Confluent Cloud
   and ACL enforcement acceptance is not complete. Existing ACL/DESCRIBE
   semantics are retained.
@@ -46,7 +57,8 @@ credential values are redacted; review before sharing them.
 
 ## Known dependency risks
 
-Gradle 9.9.1 bundles Guava 33.4.6-jre and Jackson Databind 2.22.3 affected by
+The release assessment dated 2026-11-13 records that Gradle 9.9.1 bundles
+Guava 33.4.6-jre and Jackson Databind 2.22.3 affected by
 [CVE-2026-102554](https://github.com/google/guava/security/advisories/GHSA-xxph-c9ww-hj94)
 and [CVE-2026-110879](https://github.com/FasterXML/jackson-databind/security/advisories/GHSA-m8xf-2cr7-77ph).
 These are build-environment findings; those versions are not runtime components

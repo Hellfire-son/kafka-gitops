@@ -1,14 +1,20 @@
+<!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
 # Services
 
-If you have security on your cluster, you can use `kafka-gitops` to manage ACLs. Kafka GitOps automatically builds the necessary ACLs for most use cases. 
+Kafka GitOps 0.4.0 generates ACL definitions from services using the existing
+application, Kafka Streams and Kafka Connect profiles. Review the generated
+plan against your actual authorizer; full ACL enforcement acceptance is not
+established. See [permissions](permissions.md) and [security limits](../SECURITY.md).
 
 ## Application Example
 
-A basic example shown below defines one topic, `test-topic`, and one service, `my-application`. 
+A basic example shown below defines one topic, `test-topic`, and one service, `my-application`.
 
 The service `my-application` both consumes from and produces to `test-topic`. This will generate the necessary ACLs for `my-application` to do this.
 
-?> **NOTE**: If using Confluent Cloud, omit the principal field.
+> **Note:** Omit `principal` only when deliberately using the legacy
+> `settings.ccloud.enabled: true` account-resolution path. With explicit principals,
+> leave that setting unset or false. See [Confluent Cloud](confluent-cloud.md).
 
 ```yaml
 topics:
@@ -26,11 +32,23 @@ services:
       - test-topic
 ```
 
-Behind the scenes, this will generate three ACLs:
+With topic DESCRIBE opt-in disabled, this application example generates three ACLs:
 
 - `READ` for topic `test-topic`
 - `WRITE` for topic `test-topic`
 - `READ` for consumer group `my-application`
+
+Topic DESCRIBE is an existing explicit opt-in, not an automatic grant:
+
+```yaml
+settings:
+  services:
+    acls:
+      describeTopicEnabled: true
+```
+
+When enabled, it adds topic DESCRIBE for the application's consumed/produced
+topics. It does not change the READ/WRITE/group ACLs listed above.
 
 #### Group ID
 
@@ -52,7 +70,7 @@ This would allow your consumer group to access kafka using `my-application-servi
 
 ## Kafka Streams Example
 
-A basic example shown below defines one topic, `test-topic`, and one kafka streams application, `my-stream`. 
+A basic example shown below defines one topic, `test-topic`, and one kafka streams application, `my-stream`.
 
 The service `my-stream` both consumes from and produces to `test-topic`. This will generate the necessary ACLs for `my-stream` to do this.
 
@@ -99,7 +117,7 @@ This would allow your streams application to access kafka using `my-stream-appli
 
 ## Kafka Connect Example
 
-A basic example which defines one Kafka Connect cluster that has one connector running. 
+A basic example which defines one Kafka Connect cluster that has one connector running.
 
 ```yaml
 topics:
@@ -120,7 +138,7 @@ topics:
     replication: 1
     configs:
       cleanup.policy: compact
-      
+
   rabbitmq-data:
     partitions: 6
     replication: 1
@@ -183,6 +201,6 @@ services:
           - rabbitmq-data
 ```
 
-This allows your connect cluster to access kafka using `kafka-connect-cluster` as the `group.id`. 
+This allows your connect cluster to access kafka using `kafka-connect-cluster` as the `group.id`.
 
-!> **NOTE**: The `group-id` setting only affects the connect cluster `group.id`, and not any sink connector group IDs.
+> **NOTE**: The `group-id` setting only affects the connect cluster `group.id`, and not any sink connector group IDs.

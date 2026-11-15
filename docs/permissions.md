@@ -1,18 +1,49 @@
+<!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
 # Permissions
 
-When running against a secured Kafka cluster, `kafka-gitops` needs to be authorized to perform actions against the cluster. This can either be a super user defined by the Kafka cluster or a custom user with specific permissions.
+Kafka GitOps 0.4.0 needs Kafka authorization for every read and write operation
+in its chosen scope. A dedicated principal can be granted the required rights;
+superuser access is not mandatory for every deployment. Full authorization and
+ACL enforcement acceptance has not been completed for the release.
+
+Kafka GitOps manages ACL definitions, not Kafka authentication credentials.
+External account creation is a separate [legacy Confluent Cloud](confluent-cloud.md)
+integration. Existing READ/WRITE/CREATE and opt-in DESCRIBE profiles are unchanged.
+
+## RF metadata and scope
+
+RF planning/apply additionally uses cluster/topic identity, broker configs,
+features, log-directory metadata and reassignment APIs. The inherited ACL
+bootstrap examples below do not establish a complete RF permission matrix or
+a least-privilege policy for every broker/vendor distribution. Verify the actual
+required permissions and authorizer behavior for your deployment. Missing
+critical evidence or authorization blocks RF execution.
+
+`--skip-acls` excludes ACL management; it does not grant missing Kafka permissions.
+`--skip-topics` excludes topic management. Plans and saved JSON do not grant rights.
+See [Quick Start](quick-start.md), [RF safety](design/elr-replication-compatibility.md)
+and [SECURITY.md](../SECURITY.md).
 
 ## Example
 
-For the purposes of this example, we'll assume we have a user principal named `gitops-user`. 
+For the purposes of this example, we'll assume we have a user principal named `gitops-user`.
 
-Full usage of kafka-gitops means you are managing topics, services, ACLs, and users. If you plan to make use of our ACL management features, the `gitops-user` principal must have the ability to create and manage ACLs.
+If ACL management is enabled, the `gitops-user` principal needs authority to
+create and delete ACLs. User definitions in YAML generate ACLs for principals;
+they do not provision broker authentication users.
 
-If you do not want to use a super user, you can create a `gitops-user` principal and a current super user can make them an *ACL Administrator*. An ACL administrator has the `ALTER --cluster` access control entry. This entry allows the user to create and delete ACLs for the given cluster. 
+If you do not want to use a super user, you can create a `gitops-user` principal and a current super user can make them an *ACL Administrator*. An ACL administrator has the `ALTER --cluster` access control entry. This entry allows the user to create and delete ACLs for the given cluster.
 
-!> **Caution**: An ACL administrator can then create ACLs for any other principal, including themselves.  
+> **Caution**: An ACL administrator can then create ACLs for any other principal, including themselves.
 
 ### Manually Add ACLs
+
+The `kafka-acls` examples below use Kafka administrative tooling supplied by your
+broker distribution, not the GitOps JAR. Select the appropriate wrapper for your
+installation. These are broad, mutating bootstrap examples; review them before
+running with a separately authorized administrator. They are not a fully accepted
+production permission recipe, especially for RF management.
+
 Add the alter cluster ACL to the `gitops-user` principal:
 
 ```bash
@@ -30,10 +61,23 @@ kafka-acls --bootstrap-server localhost:9092 --command-config admin.properties -
 --operation Describe --topic '*'
 ```
 
-The above configs allow the `gitops-user` to manage ACLs, topics, and topic configurations.
+These examples illustrate ACL, topic and topic-configuration permissions. They
+do not prove that all RF metadata reads or vendor-specific policies are authorized.
 
 ### State File Definition
-You can also create the ACLs using kafka-gitops. Run it once with super admin credentials using the state file below, and then switch to using your `gitops-user` credentials.
+
+The YAML below is an ACL bootstrap example. Use a separately authorized
+administrator's private `admin.properties`, review the generated ACLs and retain
+`--skip-topics --no-delete` to exclude topic management and prevent removals.
+Save it as `acl-bootstrap.yaml`, then plan and explicitly apply only after review:
+
+```bash
+java -jar kafka-gitops-all.jar --command-config admin.properties --skip-topics --no-delete -f acl-bootstrap.yaml plan -o acl-bootstrap-plan.json
+java -jar kafka-gitops-all.jar --command-config admin.properties --skip-topics --no-delete apply -p acl-bootstrap-plan.json
+```
+
+These commands can grant broad access. Validate the resulting permissions before
+switching to the `gitops-user` principal; the example is not full RF acceptance.
 
 ```yaml
 users:

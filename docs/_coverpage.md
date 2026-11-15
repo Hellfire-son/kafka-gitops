@@ -1,11 +1,14 @@
 <!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
+# Kafka GitOps 0.4.0
 
-# kafka-gitops
+> Declarative Kafka topic, configuration and ACL management
 
-> GitOps for Apache Kafka
+- One universal Java 21 JAR with Kafka Client 4.4.0
+- Read-only plans, explicit apply and RF/ELR safety checks
+- Independent community-maintained fork; original author Shawn Seymour
 
-- Automated Topic & ACL Management
-- Manage topics, services, and ACLs with desired state files
-
-[Documentation](/documentation.md)
-[Upstream project](https://github.com/joschi/kafka-gitops)
+[Download v0.4.0](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0)
+[English documentation](documentation.md)
+[Документация на русском](release/kafka-gitops-v0.4.0-release-notes-ru.md)
+[Repository](https://github.com/Hellfire-son/kafka-gitops)
+[Upstream base](https://github.com/joschi/kafka-gitops)

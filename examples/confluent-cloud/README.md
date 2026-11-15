@@ -1,72 +1,73 @@
-# Confluent Cloud Example
+<!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
+# Confluent Cloud example fragments
 
-This is a basic example of using `kafka-gitops` with Confluent Cloud.
+These inherited YAML fragments illustrate the **legacy external `ccloud`
+account-resolution path**. Confluent Cloud and current external-CLI compatibility
+are not fully live-accepted for Kafka GitOps 0.4.0. See the current
+[Confluent Cloud guide](../../docs/confluent-cloud.md) for explicit-principal
+configuration, safety limits and authentication handling.
 
-## Files
-- `services.yaml` defines service accounts + generates ACLs
-- `topics.yaml` defines topics and their configs
-- `users.yaml` defines "user" service accounts and roles (prefixed with `user-{name}`)
+## Files and root state
 
-## Configuration
+- [services.yaml](services.yaml) defines a service whose principal is resolved
+  from an external service account.
+- [topics.yaml](topics.yaml) defines a topic and its configuration.
+- [users.yaml](users.yaml) defines a user-role mapping; legacy external account
+  names use the `user-{name}` prefix.
 
-The following environment variables need to be set locally or in the build job:
+Create a root `state.yaml` next to those fragments only when deliberately using
+the legacy integration:
 
-```bash
-# For service account creation / listing
-export XX_CCLOUD_EMAIL="Your Confluent Cloud email address"
-export XX_CCLOUD_PASSWORD="Your Confluent Cloud password"
-
-# For executing against the cluster
-export KAFKA_BOOTSTRAP_SERVERS="Your Confluent Cloud cluster URL"
-export KAFKA_SASL_JAAS_USERNAME"Your Confluent Cloud API key"
-export KAFKA_SASL_JAAS_PASSWORD="Your Confluent Cloud API secret"
-export KAFKA_SECURITY_PROTOCOL="SASL_SSL"
-export KAFKA_SASL_MECHANISM="PLAIN"
-export KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM="HTTPS"
-
-# For colored output
-export CLICOLOR_FORCE="true"
+```yaml
+settings:
+  ccloud:
+    enabled: true
+  files:
+    services: services.yaml
+    topics: topics.yaml
+    users: users.yaml
 ```
 
-## Service Accounts
-
-Once defining services and users, you can generate service accounts. 
-
-**NOTE**: Before running `accounts` or `plan`, ensure you are logged in to Confluent Cloud. Use `ccloud login`.
-
-Create accounts:
+Fragment paths are resolved relative to the root state file. With the
+[Java 21 JAR](../../docs/installation.md) available in your working directory:
 
 ```bash
-kafka-gitops -f state.yaml accounts
+java -jar kafka-gitops-all.jar -f state.yaml validate
 ```
 
-## Plan
+Local validation does not run the external CLI or contact Kafka. It does not
+prove that a deployed `ccloud` version, authentication or vendor policy works.
 
-Generate an execution plan against your Confluent Cloud cluster as so:
+## Legacy account action
+
+The supported GitOps subcommand is `account`, singular. It can create external
+service accounts, so run it only after separately authorizing and accepting the
+legacy CLI/authentication path described in the guide:
 
 ```bash
-kafka-gitops -f state.yaml plan -o plan.json
+java -jar kafka-gitops-all.jar -f state.yaml account
 ```
 
-To disable deletes, you can use:
+The former `accounts` spelling is not a CLI command. Do not reuse the old
+password-based `ccloud login` automation as a verified setup procedure.
+
+## Plan and apply
+
+Prepare private Kafka client properties as described in the guide. A plan is
+read-only; with legacy account resolution enabled it also lists external accounts:
 
 ```bash
-kafka-gitops -f state.yaml --no-delete plan -o plan.json
+java -jar kafka-gitops-all.jar --command-config client.properties --no-delete -f state.yaml plan -o plan.json
 ```
 
-This will output a plan file as well as pretty print the plan to standard out.
-
-## Apply
-
-Apply the plan against your Confluent Cloud cluster as so:
+After a successful plan, review every topic and ACL operation before the separate
+write step:
 
 ```bash
-kafka-gitops -f state.yaml apply -p plan.json
+java -jar kafka-gitops-all.jar --command-config client.properties --no-delete apply -p plan.json
 ```
 
-
-To disable deletes, you can use:
-
-```bash
-kafka-gitops -f state.yaml --no-delete apply -p plan.json
-```
+Apply can change Kafka and partially complete; it has no automatic rollback.
+`--no-delete` forbids deletion and RF decreases. RF planning is enabled by
+default and still requires the documented safety evidence. No credentials are
+included here; keep client properties and sensitive evidence outside Git.

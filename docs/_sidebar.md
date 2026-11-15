@@ -1,13 +1,20 @@
 <!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
 - **Getting Started**
-- [Introduction](/documentation.md)
-- [Installation](/installation.md)
-- [Quick Start](/quick-start.md)
-- [Services](/services.md)
-- [Confluent Cloud](/confluent-cloud.md)
-- [Permissions](/permissions.md)
-- [Specification](/specification.md)
-- [0.4.0 Release Notes](/release/v0.4.0-release-notes.md)
-- **Links**
+- [Introduction](documentation.md)
+- [Installation](installation.md)
+- [Quick Start](quick-start.md)
+- **Reference**
+- [Services and ACL profiles](services.md)
+- [Confluent Cloud / legacy integration](confluent-cloud.md)
+- [Permissions](permissions.md)
+- [Desired-state specification](specification.md)
+- **v0.4.0**
+- [Download release](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0)
+- [English Release Notes](release/kafka-gitops-v0.4.0-release-notes-en.md)
+- [Документация на русском](release/kafka-gitops-v0.4.0-release-notes-ru.md)
+- **Project**
+- [Repository](https://github.com/Hellfire-son/kafka-gitops)
+- [Security / private reports](https://github.com/Hellfire-son/kafka-gitops/blob/main/SECURITY.md)
+- [Contributing](https://github.com/Hellfire-son/kafka-gitops/blob/main/CONTRIBUTING.md)
 - [Original project](https://github.com/devshawn/kafka-gitops)
 - [Upstream base](https://github.com/joschi/kafka-gitops)
