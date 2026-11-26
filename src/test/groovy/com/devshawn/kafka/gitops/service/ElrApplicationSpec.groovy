@@ -44,7 +44,7 @@ class ElrApplicationSpec extends Specification {
         }
         new AdminReplicationApplication({ fake.admin } as Supplier,
                 new AdminReassignmentExecutor.Settings(batch,Duration.ofSeconds(1),Duration.ofMillis(1)),time,
-                { admin,names,timeout -> ReplicationMetadataReader.read(admin,names,timeout,true) } as AdminReassignmentExecutor.SnapshotReader,
+                AdminReassignmentExecutor.LIVE_SNAPSHOTS,
                 Duration.ofSeconds(3), execution ?: ({ engine,request -> engine.execute(request) } as BiFunction))
     }
 

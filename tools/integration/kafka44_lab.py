@@ -198,7 +198,8 @@ class LabRun:
     def rf(self):
         before=self.gate('RF01-before');y=self.yaml('RF01','rf',rf=2)
         p,r,args=self.plan('RF01-plan',y,expected=2,guarded=True)
-        assert 'ELR_UNSUPPORTED' in r.stdout and 'Replication: [1] -> 2' in r.stdout
+        assert 'ELR_UNSUPPORTED' in r.stdout
+        assert 'Replication factor: 1 -> 2' in r.stdout or 'Replication: [1] -> 2' in r.stdout
         cmd=[JAVA,'-cp',str(ROOT/'probe-classes')+os.pathsep+str(JAR),'com.devshawn.kafka.gitops.KafkaLabProbe','plan',PROPS,self.folder/'RF01-apply-api-audit.json']+self.args(y,'apply')[3:]
         self.gate('RF01-apply-before');applied=self.command('RF01-apply',cmd,2)
         assert 'ELR_UNSUPPORTED' in applied.stdout
@@ -267,7 +268,8 @@ class LabRun:
         args=[JAVA,'-cp',str(ROOT/'probe-classes')+os.pathsep+str(JAR),'com.devshawn.kafka.gitops.KafkaLabProbe','plan',PROPS,self.folder/'W10-api-audit.json']+self.args(self.folder/'W07.yaml','apply')[3:]
         result=self.command('W10',args,0)
         assert read(self.folder/'W10-api-audit.json')['writeAttempts']==0
-        assert 'There are no necessary changes; the actual state matches the desired state.' in result.stdout
+        assert ('Status: NO_CHANGES' in result.stdout
+                or 'There are no necessary changes; the actual state matches the desired state.' in result.stdout)
         after=self.snapshot('W10-after');assert after['topics']==before['topics']
         self.record('W10','PASS','Reapply achieved desired state without writes','No-op apply exit0; zero write attempts; metadata unchanged',args,0,before,after)
 

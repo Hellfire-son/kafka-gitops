@@ -60,7 +60,8 @@ class DevelopmentTask2WorkflowSpec extends Specification {
         result.text.contains('1048588 -> 10485880')
         result.text.contains('Current ordered assignments')
         !managed || result.text.contains('Partition 0: [0, 1]')
-        result.text.indexOf('[PLAN] Topic:') < result.text.indexOf('[SUMMARY]')
+        0 <= result.text.indexOf('[PLAN] [UPDATE] Topic: acl-test')
+        result.text.indexOf('[PLAN] [UPDATE] Topic: acl-test') < result.text.indexOf('[SUMMARY]')
         kafka.operations.empty && kafka.createdTopics.empty && kafka.deletedTopics.empty && kafka.partitionChanges.empty
 
         where:
@@ -146,13 +147,14 @@ class DevelopmentTask2WorkflowSpec extends Specification {
         then:
         result.code == 2
         result.text.contains('Partitions: 4 -> 4')
-        result.text.contains('Replication: [1] -> 2')
+        result.text.contains('Replication factor: 1 -> 2')
         result.text.contains('1048588 -> 10485880')
         result.text.contains('INSUFFICIENT_BROKERS')
         result.text.contains('Discovered=2, eligible=1')
         result.text.contains('Proposed assignments: NOT_CALCULATED')
         result.text.contains('Broker 1: EXCLUDED')
-        result.text.indexOf('[PLAN] Topic:') < result.text.indexOf('[BLOCKED]')
+        0 <= result.text.indexOf('[PLAN] [UPDATE] Topic: acl-test')
+        result.text.indexOf('[PLAN] [UPDATE] Topic: acl-test') < result.text.indexOf('[BLOCKED] INSUFFICIENT_BROKERS')
         result.text.contains('Ready for apply: NO')
         out.text == 'existing file stays intact'
         kafka.operations.empty
@@ -240,7 +242,7 @@ class DevelopmentTask2WorkflowSpec extends Specification {
         'no space' | [minimumUsableBytes:OptionalLong.of(0)]
     }
 
-    void 'default apply binding uses a fresh real reader and observes completion before legacy followup writes'() {
+    void 'default apply binding independently verifies RF before followup writes from saved plan=#saved'() {
         given:
         productionBinding=true
         kafka.admin = new com.devshawn.kafka.gitops.service.Task2ExecutionAdmin()
@@ -256,18 +258,22 @@ class DevelopmentTask2WorkflowSpec extends Specification {
         kafka.admin.writes==0
 
         when:
-        def applied=run(['apply','--plan',out.absolutePath])
+        def applied=run(saved ? ['apply','--plan',out.absolutePath] : ['apply'])
 
         then:
         applied.code==0
-        applied.text.contains('[COMPLETED]')
-        applied.text.contains('Apply complete!')
+        applied.text.contains('Reassignment: COMPLETED')
+        applied.text.contains('Final verification: PASSED')
+        applied.text.contains('Status: APPLY_COMPLETED')
         applied.text.contains('DISK_RESERVE_NOT_PROVEN')
         kafka.opens==1
         kafka.admin.writes==1
         kafka.admin.calls.count('close')==1
         kafka.admin.state.topics()['acl-test'].partitions().every { it.replicas()==[0,1] && it.isr()==[0,1] as Set }
         !kafka.operations.empty
+
+        where:
+        saved << [true, false]
     }
 
     void 'default apply binding refuses unknown critical metadata before every fake write'() {
@@ -285,6 +291,8 @@ class DevelopmentTask2WorkflowSpec extends Specification {
         applied.code==2
         applied.text.contains('CORDONING_UNKNOWN')
         applied.text.contains('Actual: UNKNOWN')
+        applied.text.contains('Status: APPLY_BLOCKED')
+        applied.text.contains('Successful resource changes: 0')
         kafka.admin.writes==0
         kafka.operations.empty
         kafka.admin.calls.count('close')==1

@@ -3,7 +3,7 @@
 
 This is the independent community-maintained
 [Hellfire-son/kafka-gitops](https://github.com/Hellfire-son/kafka-gitops) fork.
-[Version 0.4.0 is published](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0).
+See [GitHub Releases](https://github.com/Hellfire-son/kafka-gitops/releases) for release assets.
 No vendor security support, response SLA or production certification is claimed.
 
 ## Reporting a vulnerability
@@ -27,23 +27,20 @@ or logs. History changes require a separate decision; automated cleanup is not p
 
 ## Scope of verification
 
-- Java 21 and one Kafka Client 4.4.0 universal JAR.
-- Earlier integration tests on the preceding artifact covered topics, configs,
-  partition increases and RF 1→2→3→2 on Kafka 3.2.3, 3.7.1 and 4.4.0.
-- The final v0.4.0 JAR passed separate live smoke tests on 2026-11-14:
-  Kafka 3.2.3/3.7.1 — plan, new topic and RF 1→2; Kafka 4.4.0 — plan, new topic
-  and RF 1→2→3→2 with ELR enabled at level 1. This does not repeat the entire
-  earlier matrix. See [final technical acceptance](docs/release/v0.4.0-final-review.md)
-  and the [English](docs/release/kafka-gitops-v0.4.0-release-notes-en.md) /
-  [Russian](docs/release/kafka-gitops-v0.4.0-release-notes-ru.md) release notes.
-- ADS 4.3.1 is NOT TESTED LIVE. Full SASL/TLS/Kerberos/OAuth/Confluent Cloud
-  and ACL enforcement acceptance is not complete. Existing ACL/DESCRIBE
-  semantics are retained.
-- Planning is read-only. Apply can create/change/delete Kafka resources subject
-  to the existing options, permissions and fresh safety checks. RF decreases
-  require `--allow-replication-decrease`; `--no-delete` forbids them.
-- Use a dedicated non-production environment for acceptance. Lab scripts are
-  opt-in, identity-gated and never part of automatic Java CI cluster operations.
+Independent Final QA Round 3 exercised the v0.4.1 Java 21 JAR on Kafka
+3.2.3, 3.7.1, 4.4.0 with ELR level 1, and Confluent cp-kafka 7.9.11.
+The Confluent lab verified SASL/PLAIN, ACL enforcement and repeated ACL
+deletion. ADS, Kerberos, TLS and OAuth were outside the live test matrix.
+
+Planning is read-only. Apply uses the existing options, permissions and fresh
+safety checks. RF decreases require `--allow-replication-decrease` and
+`--no-delete` forbids them. Round 3 verified redaction using synthetic
+credentials. Gitleaks reported zero findings in the scanned release artifacts.
+Dependency versions are unchanged from v0.4.0. See the
+[English](docs/release/kafka-gitops-v0.4.1-release-notes-en.md) and [Russian](docs/release/kafka-gitops-v0.4.1-release-notes-ru.md) notes.
+
+Use a dedicated non-production environment for acceptance. Lab scripts are
+opt-in and check the fixture identity before changing Kafka resources.
 
 ## Credentials and plans
 

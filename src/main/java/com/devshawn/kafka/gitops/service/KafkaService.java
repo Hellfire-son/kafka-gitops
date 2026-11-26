@@ -5,10 +5,13 @@ import com.devshawn.kafka.gitops.config.KafkaGitopsConfig;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot;
 import com.devshawn.kafka.gitops.domain.state.TopicDetails;
 import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
+import com.devshawn.kafka.gitops.exception.KafkaExecutionException.Code;
+import com.devshawn.kafka.gitops.exception.KafkaExecutionException.WriteOutcome;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreatePartitionsOptions;
+import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -23,6 +26,15 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.errors.InvalidReplicationFactorException;
+import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -32,11 +44,13 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import java.time.Duration;
 
 public class KafkaService {
@@ -62,8 +76,40 @@ public class KafkaService {
         request("Creating a Kafka ACL", admin -> admin.createAcls(Collections.singletonList(binding)).all());
     }
 
-    public void deleteAcl(AclBinding binding) {
-        request("Deleting a Kafka ACL", admin -> admin.deleteAcls(Collections.singletonList(binding.toFilter())).all());
+    /** An exact filter can confirm deletion of at most one distinct binding. */
+    public boolean deleteAcl(AclBinding binding) {
+        AclBindingFilter filter = binding.toFilter();
+        String operation = "Deleting a Kafka ACL";
+        FilterResults response = request(operation, admin -> Objects.requireNonNull(
+                admin.deleteAcls(List.of(filter)).values().get(filter), "Missing ACL filter result"),
+                result -> aclDeletionOutcome(operation, binding, result));
+        return !response.values().isEmpty();
+    }
+
+    private WriteOutcome aclDeletionOutcome(String operation, AclBinding binding, FilterResults response) {
+        if (response == null || response.values() == null) {
+            throw new KafkaExecutionException(operation, "Kafka did not return the ACL deletion results.",
+                    Code.METADATA_INVALID, WriteOutcome.UNKNOWN);
+        }
+        boolean deleted = false;
+        Throwable failure = null;
+        for (var result : response.values()) {
+            Throwable error;
+            if (result != null && result.exception() != null) {
+                error = result.exception();
+            } else if (result != null && binding.equals(result.binding())) {
+                deleted = true;
+                continue;
+            } else {
+                error = new IllegalStateException("Unexpected binding in the ACL deletion response.");
+            }
+            if (failure == null || (rejected(failure) && !rejected(error))) failure = error;
+        }
+        if (failure != null) {
+            WriteOutcome outcome = deleted ? WriteOutcome.PARTIAL : rejected(failure) ? WriteOutcome.REJECTED : WriteOutcome.UNKNOWN;
+            throw operationFailure(operation, failure, outcome);
+        }
+        return deleted ? WriteOutcome.CONFIRMED : WriteOutcome.NO_OP;
     }
 
     public void createTopic(String name, TopicDetails details) {
@@ -94,16 +140,49 @@ public class KafkaService {
     public void beginPlanning() { planningDeadline.set(System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(partitionTimeoutMs())); }
     public void endPlanning() { planningDeadline.remove(); }
 
-    private <T> T request(String operation, java.util.function.Function<Admin, KafkaFuture<T>> call) {
+    private <T> T request(String operation, Function<Admin, KafkaFuture<T>> call) {
+        return request(operation, call, value -> WriteOutcome.CONFIRMED);
+    }
+
+    private <T> T request(String operation, Function<Admin, KafkaFuture<T>> call, Function<T, WriteOutcome> confirmation) {
+        long deadline;
+        Admin admin;
         try {
-            long deadline = deadline();
+            deadline = deadline();
             remainingNanos(deadline);
             if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
-            Admin admin = buildAdminClient();
-            try { return await(call.apply(admin), deadline); }
-            finally { admin.close(Duration.ZERO); }
-        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException ex) {
-            throw operationFailure(operation, ex);
+            admin = buildAdminClient();
+        } catch (InterruptedException | TimeoutException | RuntimeException ex) {
+            throw operationFailure(operation, ex, WriteOutcome.NOT_SENT);
+        }
+        WriteOutcome outcome = WriteOutcome.UNKNOWN;
+        try {
+            T value;
+            try {
+                value = await(call.apply(admin), deadline);
+            } catch (ExecutionException ex) {
+                throw operationFailure(operation, ex, rejected(ex.getCause()) ? WriteOutcome.REJECTED : outcome);
+            } catch (InterruptedException | TimeoutException | RuntimeException ex) {
+                throw operationFailure(operation, ex, outcome);
+            }
+            outcome = confirmation.apply(value);
+            return value;
+        } finally {
+            closeAfterRequest(admin, operation, outcome);
+        }
+    }
+
+    private void closeAfterRequest(Admin admin, String operation, WriteOutcome outcome) {
+        boolean interrupted = Thread.currentThread().isInterrupted();
+        try {
+            admin.close(Duration.ZERO);
+        } catch (RuntimeException ex) {
+            // Keep the original failure if the operation itself failed.
+            if (outcome == WriteOutcome.CONFIRMED || outcome == WriteOutcome.NO_OP) {
+                throw operationFailure(operation, ex, outcome == WriteOutcome.CONFIRMED ? outcome : WriteOutcome.UNKNOWN);
+            }
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
         }
     }
 
@@ -139,52 +218,72 @@ public class KafkaService {
         if (previousCount < 1 || targetCount <= previousCount) {
             throw new IllegalArgumentException("Partition changes require a positive previous count and a larger target count.");
         }
-        long deadline = deadline();
-        Admin admin = partitionAdmin();
+        String operation = "Increasing or verifying partitions for topic " + name;
+        long deadline;
+        Admin admin;
         try {
+            deadline = deadline();
+            admin = buildAdminClient();
+        } catch (RuntimeException ex) {
+            throw operationFailure(operation, ex, WriteOutcome.NOT_SENT);
+        }
+        WriteOutcome outcome = WriteOutcome.NOT_SENT;
+        try {
+            int actual = partitionCount(admin, name, deadline, outcome);
+            if (actual == targetCount) {
+                outcome = WriteOutcome.NO_OP;
+                return false;
+            }
+            if (actual != previousCount) {
+                throw new KafkaExecutionException("Partition plan is stale.", "Topic " + name + " has " + actual
+                        + " partitions, expected " + previousCount + ". Re-plan before retrying.",
+                        Code.PARTITION_PLAN_STALE, outcome);
+            }
+            var options = new CreatePartitionsOptions().timeoutMs(remainingMs(deadline));
+            var changes = Collections.singletonMap(name, NewPartitions.increaseTo(targetCount));
+            outcome = WriteOutcome.UNKNOWN;
+            KafkaFuture<Void> submitted = admin.createPartitions(changes, options).all();
             try {
-                int actual = partitionCount(admin, name, deadline);
+                await(submitted, deadline);
+            } catch (ExecutionException ex) {
+                if (rejected(ex.getCause())) outcome = WriteOutcome.REJECTED;
+                throw ex;
+            }
+            // Controller acknowledgement can precede metadata propagation to the broker answering describeTopics.
+            while (true) {
+                actual = partitionCount(admin, name, deadline, outcome);
                 if (actual == targetCount) {
-                    return false;
+                    outcome = WriteOutcome.CONFIRMED;
+                    return true;
                 }
                 if (actual != previousCount) {
-                    throw new KafkaExecutionException("Partition plan is stale.", "Topic " + name + " has " + actual
-                            + " partitions, expected " + previousCount + ". Re-plan before retrying.");
+                    throw new KafkaExecutionException("Partition result differs from the plan.", "Topic " + name + " has "
+                            + actual + " partitions, expected " + targetCount + ". Changes may be partially applied; re-plan before retrying.");
                 }
-                await(admin.createPartitions(Collections.singletonMap(name, NewPartitions.increaseTo(targetCount)),
-                        new CreatePartitionsOptions().timeoutMs(remainingMs(deadline))).all(), deadline);
-                // Controller acknowledgement can precede metadata propagation to the broker answering describeTopics.
-                while (true) {
-                    actual = partitionCount(admin, name, deadline);
-                    if (actual == targetCount) {
-                        return true;
-                    }
-                    if (actual != previousCount) {
-                        throw new KafkaExecutionException("Partition result differs from the plan.", "Topic " + name + " has "
-                                + actual + " partitions, expected " + targetCount + ". Changes may be partially applied; re-plan before retrying.");
-                    }
-                    TimeUnit.NANOSECONDS.sleep(Math.min(TimeUnit.MILLISECONDS.toNanos(100), remainingNanos(deadline)));
-                }
-            } finally {
-                admin.close(Duration.ZERO);
+                TimeUnit.NANOSECONDS.sleep(Math.min(TimeUnit.MILLISECONDS.toNanos(100), remainingNanos(deadline)));
             }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            throw partitionFailure("increasing partitions for topic " + name, ex);
+            throw operationFailure("increasing partitions for topic " + name, ex, outcome);
         } catch (KafkaExecutionException ex) {
             throw ex;
         } catch (ExecutionException | TimeoutException | RuntimeException ex) {
-            throw partitionFailure("increasing or verifying partitions for topic " + name, ex);
+            throw operationFailure(operation, ex, outcome);
+        } finally {
+            closeAfterRequest(admin, operation, outcome);
         }
     }
 
-    private int partitionCount(Admin admin, String name, long deadline) throws InterruptedException, ExecutionException, TimeoutException {
+    private int partitionCount(Admin admin, String name, long deadline, WriteOutcome outcome)
+            throws InterruptedException, ExecutionException, TimeoutException {
         Map<String, TopicDescription> descriptions = await(admin.describeTopics(Collections.singletonList(name),
                 new DescribeTopicsOptions().timeoutMs(remainingMs(deadline))).allTopicNames(), deadline);
         TopicDescription topic = descriptions.get(name);
         if (topic == null || topic.partitions().isEmpty()) {
+            String consequence = outcome == WriteOutcome.NOT_SENT ? "No partition change was submitted."
+                    : "Changes may be partially applied.";
             throw new KafkaExecutionException("Cannot confirm partition count.", "Missing metadata for topic " + name
-                    + ". Changes may be partially applied; re-plan before retrying.");
+                    + ". " + consequence + " Re-plan before retrying.", Code.METADATA_INVALID, outcome);
         }
         return topic.partitions().size();
     }
@@ -297,8 +396,21 @@ public class KafkaService {
     }
 
     private KafkaExecutionException operationFailure(String message, Throwable error) {
+        return operationFailure(message, error, WriteOutcome.UNKNOWN);
+    }
+
+    private KafkaExecutionException operationFailure(String message, Throwable error, WriteOutcome outcome) {
         var failure = com.devshawn.kafka.gitops.util.KafkaDiagnostics.failure(message, error);
         return new KafkaExecutionException(failure.getMessage(), failure.getExceptionMessage()
-                + " Connection target: " + connectionTarget() + ".", failure.getCode());
+                + " Connection target: " + connectionTarget() + ".", failure.getCode(), outcome);
+    }
+
+    /** A typed rejection from the request's future. Transport, timeouts and verification errors are inconclusive. */
+    private static boolean rejected(Throwable cause) {
+        return cause instanceof AuthorizationException || cause instanceof InvalidConfigurationException
+                || cause instanceof InvalidPartitionsException || cause instanceof InvalidReplicationFactorException
+                || cause instanceof InvalidRequestException || cause instanceof InvalidTopicException
+                || cause instanceof PolicyViolationException || cause instanceof TopicExistsException
+                || cause instanceof UnsupportedVersionException;
     }
 }

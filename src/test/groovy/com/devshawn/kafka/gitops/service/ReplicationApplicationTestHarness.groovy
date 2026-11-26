@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.devshawn.kafka.gitops.service
 
+import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.common.TopicPartition
 
@@ -17,6 +18,9 @@ class ReplicationApplicationTestHarness extends ExecutorHarness {
     int opens
     int executionCalls
     long timeoutMs = 50L
+    long rpcTimeoutMs = 10L
+    long pollIntervalMs = 5L
+    List<Integer> snapshotTimeouts = []
     int batchSize = 1
     Closure executeOverride
     ReassignmentExecutor.ExecutionResult lastResult
@@ -37,10 +41,14 @@ class ReplicationApplicationTestHarness extends ExecutorHarness {
 
     ReplicationApplication application() {
         Supplier<Admin> supplier = { opens++; events.add('open'); fake.admin } as Supplier<Admin>
-        AdminReassignmentExecutor.SnapshotReader reader = { Admin supplied,Set names,int timeout ->
-            assert supplied.is(fake.admin)
-            snapshotReads++
-            observed(snapshotMutation(fake.current),[completedAtNanos:OptionalLong.of(clock.now)] + evidence)
+        def fixture = this
+        AdminReassignmentExecutor.SnapshotReader reader = new AdminReassignmentExecutor.SnapshotReader() {
+            @Override ReplicationClusterSnapshot read(Admin supplied, Set<String> names, int timeout) {
+                assert supplied.is(fixture.fake.admin)
+                fixture.snapshotReads++
+                fixture.snapshotTimeouts.add(timeout)
+                observed(fixture.snapshotMutation(fixture.fake.current), [completedAtNanos: OptionalLong.of(fixture.clock.now)] + fixture.evidence)
+            }
         }
         BiFunction<AdminReassignmentExecutor,ReassignmentExecutor.Request,ReassignmentExecutor.ExecutionResult> execute = { engine,request ->
             executionCalls++
@@ -48,7 +56,8 @@ class ReplicationApplicationTestHarness extends ExecutorHarness {
             lastResult
         } as BiFunction
         def application = new AdminReplicationApplication(supplier,
-                new AdminReassignmentExecutor.Settings(batchSize,Duration.ofMillis(10),Duration.ofMillis(5)),clock,reader,Duration.ofMillis(timeoutMs),execute)
+                new AdminReassignmentExecutor.Settings(batchSize,Duration.ofMillis(rpcTimeoutMs),Duration.ofMillis(pollIntervalMs)),
+                clock,reader,Duration.ofMillis(timeoutMs),execute)
         return ({ topics,permissions ->
             try { application.apply(topics,permissions) }
             catch (RuntimeException ex) { failure = ex; throw ex }

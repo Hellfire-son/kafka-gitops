@@ -7,6 +7,7 @@ import com.devshawn.kafka.gitops.config.KafkaGitopsConfigLoader;
 import com.devshawn.kafka.gitops.config.ManagerConfig;
 import com.devshawn.kafka.gitops.domain.confluent.ServiceAccount;
 import com.devshawn.kafka.gitops.domain.options.GetAclOptions;
+import com.devshawn.kafka.gitops.domain.plan.ApplyReport;
 import com.devshawn.kafka.gitops.domain.plan.DesiredPlan;
 import com.devshawn.kafka.gitops.domain.plan.PlanningReport;
 import com.devshawn.kafka.gitops.exception.PlanBlockedException;
@@ -147,19 +148,25 @@ public class StateManager {
     }
 
     public DesiredPlan apply() {
+        return apply(null);
+    }
+
+    public DesiredPlan apply(ApplyReport results) {
         DesiredPlan desiredPlan = planManager.readPlanFromFile();
+        PlanningReport planning = null;
         if (desiredPlan == null) {
-            PlanningReport report = planDetailed();
-            if (report.blocked()) throw new PlanBlockedException(report);
-            desiredPlan = report.changes();
+            planning = planDetailed();
+            if (planning.blocked()) throw new PlanBlockedException(planning);
+            desiredPlan = planning.changes();
         }
+        if (results != null) results.prepare(desiredPlan, planning);
 
         applyManager.validateReplicationPermissions(desiredPlan);
         planManager.validatePlanHasChanges(desiredPlan, managerConfig.isDeleteDisabled(),
                 managerConfig.isSkipAclsDisabled(), managerConfig.isSkipTopicsDisabled());
 
         System.out.println("[CONNECT] Preparing apply against Kafka target: " + kafkaService.connectionTarget());
-        applyManager.applyPlan(desiredPlan);
+        applyManager.applyPlan(desiredPlan, results);
 
         return desiredPlan;
     }

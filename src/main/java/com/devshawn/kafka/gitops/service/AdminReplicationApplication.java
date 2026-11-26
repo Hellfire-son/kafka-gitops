@@ -31,7 +31,7 @@ final class AdminReplicationApplication implements ReplicationApplication {
                 new AdminReassignmentExecutor.TimeSource() {
                     public long nanoTime() { return System.nanoTime(); }
                     public void pause(long nanos) throws InterruptedException { TimeUnit.NANOSECONDS.sleep(nanos); }
-                }, (admin, topics, timeout) -> ReplicationMetadataReader.read(admin, topics, timeout, true),
+                }, AdminReassignmentExecutor.LIVE_SNAPSHOTS,
                 Duration.ofMinutes(10), AdminReassignmentExecutor::execute);
     }
 

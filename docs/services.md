@@ -1,10 +1,10 @@
 <!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
 # Services
 
-Kafka GitOps 0.4.0 generates ACL definitions from services using the existing
+Kafka GitOps 0.4.1 generates ACL definitions from services using the existing
 application, Kafka Streams and Kafka Connect profiles. Review the generated
-plan against your actual authorizer; full ACL enforcement acceptance is not
-established. See [permissions](permissions.md) and [security limits](../SECURITY.md).
+plan against your actual authorizer. Round 3 exercised ACL enforcement on local
+Confluent cp-kafka 7.9.11. See [permissions](permissions.md) and [security limits](../SECURITY.md).
 
 ## Application Example
 

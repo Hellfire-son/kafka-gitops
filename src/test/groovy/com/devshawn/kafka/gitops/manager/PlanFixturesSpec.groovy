@@ -12,6 +12,7 @@ import spock.lang.Specification
 import spock.lang.Unroll
 
 import static com.devshawn.kafka.gitops.PlanTestSupport.*
+import static com.devshawn.kafka.gitops.enums.PlanAction.REMOVE
 
 // Reuses golden files with an in-memory Kafka service, never the integration test lifecycle.
 @Unroll
@@ -53,6 +54,7 @@ class PlanFixturesSpec extends Specification {
         given:
         TestKafkaService kafka = new TestKafkaService()
         def desired = new PlanManager(options(resource(fixture + '-plan.json')), kafka, mapper()).readPlanFromFile()
+        kafka.acls = desired.aclPlans.findAll { it.action == REMOVE }.collect { it.aclDetails.toAclBinding() }
         def manager = new ApplyManager(options(null, noDelete), kafka)
         PrintStream previous = System.out
         ByteArrayOutputStream bytes = new ByteArrayOutputStream()

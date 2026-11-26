@@ -300,5 +300,5 @@ class NoWritePreflightKafka extends KafkaService {
     @Override void updateTopicConfig(Map configs) { writes++; throw new AssertionError('updateTopicConfig') }
     @Override boolean increaseTopicPartitions(String name, int previous, int target) { writes++; throw new AssertionError('increaseTopicPartitions') }
     @Override void createAcl(org.apache.kafka.common.acl.AclBinding acl) { writes++; throw new AssertionError('createAcl') }
-    @Override void deleteAcl(org.apache.kafka.common.acl.AclBinding acl) { writes++; throw new AssertionError('deleteAcl') }
+    @Override boolean deleteAcl(org.apache.kafka.common.acl.AclBinding acl) { writes++; throw new AssertionError('deleteAcl') }
 }

@@ -8,10 +8,10 @@
 - [Confluent Cloud / legacy integration](confluent-cloud.md)
 - [Permissions](permissions.md)
 - [Desired-state specification](specification.md)
-- **v0.4.0**
-- [Download release](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0)
-- [English Release Notes](release/kafka-gitops-v0.4.0-release-notes-en.md)
-- [Документация на русском](release/kafka-gitops-v0.4.0-release-notes-ru.md)
+- **v0.4.1**
+- [GitHub Releases](https://github.com/Hellfire-son/kafka-gitops/releases)
+- [English Release Notes](release/kafka-gitops-v0.4.1-release-notes-en.md)
+- [Документация на русском](release/kafka-gitops-v0.4.1-release-notes-ru.md)
 - **Project**
 - [Repository](https://github.com/Hellfire-son/kafka-gitops)
 - [Security / private reports](https://github.com/Hellfire-son/kafka-gitops/blob/main/SECURITY.md)

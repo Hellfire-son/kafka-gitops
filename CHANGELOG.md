@@ -1,6 +1,41 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Changelog
 
+## 0.4.1
+
+- Plan and apply use the same `CREATE`, `UPDATE` and `DELETE` labels, resource
+  details and config transitions. Detailed blocks omit unchanged topics without
+  diagnostics. Existing INFO and `NO_CHANGE` messages remain available with
+  `--verbose`.
+- Plan summaries count distinct blocked topics separately from blocking
+  diagnostics and unchanged topics. Both reports mark skipped resource types.
+- Apply summaries count recorded outcomes, including partial changes, rejected
+  writes, unknown results and operations that did not run. RF completion is
+  shown after its existing verification. The total of unchanged topics is
+  unknown for a saved JSON plan.
+- **QA-001.** ACL deletion counts bindings confirmed by Kafka. Reapplying a saved deletion
+  plan after the binding is gone reports `NO_OP` and exits with code 0.
+- **QA-002.** Partition drift detected immediately before a write reports `BLOCKED`.
+  An unconfirmed submitted write reports `UNKNOWN`. Later operations stay
+  `NOT_RUN`, and a run with prior confirmed changes reports `APPLY_PARTIAL`.
+- **QA-004.** Final verification of an RF decrease can wait within its existing deadline
+  when the assignment matches the ordered target and only known removed replicas
+  remain alongside the full target ISR. Success requires the exact target ISR
+  on every partition and fresh safety checks. The reads and waits share one
+  monotonic deadline, including when a thread resumes after a delay.
+- CLI options, exit codes, executable JSON format and apply behavior are
+  preserved. Read-only planning, sensitive-value redaction, RF safety checks,
+  fresh preflight and reassignment completion checks continue to apply.
+- **QA-003.** The external integration tests use per-case output paths, compare normalized
+  transcripts and check Kafka state after PLAN and APPLY. Round 3 passed 1,153 JVM
+  tests and external IntegrationSpec on Java 21 (76/76 Windows, 76/76 Linux).
+- Local live tests passed on Kafka 3.2.3, 3.7.1, 4.4.0 and cp-kafka 7.9.11,
+  including RF 4 → 6 across three racks on Confluent.
+- Java 21, Kafka Client 4.4.0, Gradle 9.9.1 and Shadow 9.6.1 are unchanged.
+
+[English Release Notes](docs/release/kafka-gitops-v0.4.1-release-notes-en.md) ·
+[Описание выпуска на русском](docs/release/kafka-gitops-v0.4.1-release-notes-ru.md)
+
 ## [0.4.0](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0) — 2026-11-15
 
 Independent continuation of joschi/kafka-gitops 0.3.1, originally created by

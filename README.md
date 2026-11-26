@@ -3,12 +3,12 @@
 
 Declarative management of Apache Kafka topics, configurations and ACLs.
 
-[![Latest release: v0.4.0](https://img.shields.io/badge/release-v0.4.0-2563eb?style=flat-square)](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0)
+[![Release: v0.4.1](https://img.shields.io/badge/release-v0.4.1-2563eb?style=flat-square)](https://github.com/Hellfire-son/kafka-gitops/releases)
 [![Java 21](https://img.shields.io/badge/Java-21-ea580c?style=flat-square)](docs/installation.md)
 [![Apache License 2.0](https://img.shields.io/badge/license-Apache%202.0-475569?style=flat-square)](LICENSE)
 
-**[English documentation](docs/release/kafka-gitops-v0.4.0-release-notes-en.md)** ·
-**[Документация на русском](docs/release/kafka-gitops-v0.4.0-release-notes-ru.md)**
+**[English documentation](docs/release/kafka-gitops-v0.4.1-release-notes-en.md)** ·
+**[Документация на русском](docs/release/kafka-gitops-v0.4.1-release-notes-ru.md)**
 
 An independent community-maintained fork, distributed as one universal Java 21 JAR.
 
@@ -23,45 +23,34 @@ run through an explicit `apply`, with fresh safety checks for replication
 operations. Service definitions generate ACLs using the existing profiles;
 ACL/DESCRIBE semantics are unchanged.
 
-## What's New in v0.4.0
+## What's New in v0.4.1
 
-Version 0.4.0 builds on the upstream 0.3.1 base:
-
-| Area | Changes in this fork |
-|---|---|
-| Runtime and dependencies | Java 21, Kafka Client 4.4.0, Gradle 9.9.1 and Shadow 9.6.1; updated Jackson, logging and compression libraries. |
-| Topics and configurations | Topic creation, config additions/updates/removals and partition increases. |
-| Replication factor | RF increases and explicitly approved decreases, with deterministic replica placement and broker/rack checks. |
-| ELR-aware safety | ISR, ELR and LastKnownELR evidence is checked; missing safety data is never assumed safe. |
-| Plan output | Current and desired values, old/new config values, ordered replica assignments, warnings and blockers. |
-| Apply and verification | Fresh RF preflight, checks between batches, reassignment monitoring and independent completion verification. |
-| Connection diagnostics | Bounded waits and clear configuration, connection and metadata error categories. |
-| Client configuration | `--command-config`, file-over-environment precedence and redaction of sensitive values in diagnostics. |
-| Older Kafka clusters | One JAR with verified Kafka 3.x/4.x scenarios and capability checks for legacy metadata. |
-
-See the [English release notes](docs/release/kafka-gitops-v0.4.0-release-notes-en.md)
-for dependency versions, migration details and the complete scope of these changes.
+PLAN shows detailed blocks for changes, warnings and blockers. PLAN and APPLY
+share action labels and a SUMMARY. With `--verbose`, existing INFO and
+`NO_CHANGE` messages remain visible. APPLY distinguishes confirmed changes,
+no-ops, blocked operations, partial completion and unknown results. The
+release fixes QA-001 through QA-004. Dependency versions are unchanged
+from v0.4.0.
 
 ## Compatibility
 
-Earlier integration trials and final smoke tests of the released JAR are separate
-evidence sets:
+Independent Final QA Round 3 passed 1,153 JVM tests, 26 Python tests, 56 CLI
+checks, 156 codec/JNI checks on each OS, and external IntegrationSpec on Java 21
+(76/76 Windows, 76/76 Linux). The live matrix used the final v0.4.1 JAR.
 
-| Target | Earlier integration trials | Final v0.4.0 JAR smoke tests |
-|---|---|---|
-| Apache Kafka 3.2.3 | **Tested:** topics, configs, partition increases; RF 1 → 2 → 3 → 2 | **Tested:** plan, new topic, RF 1 → 2 |
-| Apache Kafka 3.7.1 | **Tested:** topics, configs, partition increases; RF 1 → 2 → 3 → 2 | **Tested:** plan, new topic, RF 1 → 2 |
-| Apache Kafka 4.4.0 | **Tested:** topics, configs, partition increases; RF 1 → 2 → 3 → 2 and ELR scenarios | **Tested:** plan, new topic, RF 1 → 2 → 3 → 2; ELR remained enabled at level 1 |
-| Arenadata Streaming / ADS 4.3.1 | **NOT TESTED LIVE** | **NOT TESTED LIVE** |
+| Broker | Verified local deployment |
+|---|---|
+| Apache Kafka 3.2.3 | ZooKeeper |
+| Apache Kafka 3.7.1 | KRaft |
+| Apache Kafka 4.4.0 | KRaft, ELR level 1 enabled |
+| Confluent cp-kafka 7.9.11 | ZooKeeper, SASL/PLAIN and ACL enforcement |
 
-The final Kafka 3.x smoke tests do not repeat the entire earlier matrix. See
-[earlier integration results](docs/testing/kafka-3x-compatibility-results.md) and
-[final technical acceptance](docs/release/v0.4.0-final-review.md) for exact scopes.
-These results do not establish vendor or production certification. Compatibility
-with old Kafka brokers is not a recommendation for new production deployments.
-
-Final acceptance also recorded **1039 Java tests, 26 Python guard tests,
-56 CLI smoke checks and 156 codec/JNI checks — PASS**, separately from live trials.
+Each platform covered Validate, read-only PLAN, topic and configuration changes,
+partition increases, and RF 1 → 2 → 3 → 2. After each RF change, the ordered
+replica assignments, full ISR and control records were verified. Confluent also
+passed five RF 2 → 3 → 2 cycles and RF 4 → 6 on two topics across three racks,
+with two replicas per rack. ADS, Kerberos, TLS and OAuth were outside the live
+test matrix.
 
 ## Quick Start
 
@@ -70,8 +59,8 @@ ACLs and disables deletion. Java 21 is required.
 
 ### 1. Download the JAR
 
-Download `kafka-gitops-all.jar` from the
-[latest release, v0.4.0](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0).
+Download `kafka-gitops-all.jar` from the v0.4.1 entry under
+[GitHub Releases](https://github.com/Hellfire-son/kafka-gitops/releases).
 Compare its SHA-256 with the `SHA256SUMS` asset, then check the version:
 
 ```bash
@@ -79,7 +68,7 @@ sha256sum kafka-gitops-all.jar
 java -jar kafka-gitops-all.jar --version
 ```
 
-The version should be `0.4.0`. In PowerShell, use
+The version should be `0.4.1`. In PowerShell, use
 `Get-FileHash .\kafka-gitops-all.jar -Algorithm SHA256` for the checksum.
 
 ### 2. Configure the Kafka client
@@ -128,6 +117,11 @@ java -jar kafka-gitops-all.jar --command-config client.properties --skip-acls --
 and require a successful exit code before continuing. A blocked plan preserves
 any older output file; do not use that file as the result of a failed run.
 
+In v0.4.1, detailed blocks label proposed topic and ACL changes
+as `CREATE`, `UPDATE` or `DELETE`. The summary counts unchanged and blocked
+topics independently and shows skipped categories. See the
+[v0.4.1 release notes](docs/release/kafka-gitops-v0.4.1-release-notes-en.md).
+
 ### 6. Apply the reviewed plan
 
 ```bash
@@ -136,6 +130,12 @@ java -jar kafka-gitops-all.jar --command-config client.properties --skip-acls --
 
 **`apply` explicitly changes Kafka.** It rechecks RF safety against fresh
 metadata. A failure can leave partial changes; there is no automatic rollback.
+The v0.4.1 apply report uses the same action labels and summarizes confirmed,
+partial, blocked and unknown outcomes. A saved JSON plan has no verified total
+for unchanged topics, so the report displays `Unchanged topics: UNKNOWN`.
+A saved ACL deletion reports `NO_OP` with exit code 0 when Kafka confirms that
+the binding is already absent. If partition drift stops a write during the
+immediate safety check, APPLY reports `BLOCKED` and exits with code 2.
 For command options, use `java -jar kafka-gitops-all.jar plan --help` or
 `java -jar kafka-gitops-all.jar apply --help`.
 
@@ -169,24 +169,21 @@ reassignment; an acknowledgement alone is insufficient. See
 
 | Resource | Purpose |
 |---|---|
-| [Latest release: v0.4.0](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0) | Universal JAR, EN/RU release-note assets and `SHA256SUMS`. |
-| [English Release Notes](docs/release/kafka-gitops-v0.4.0-release-notes-en.md) | Complete v0.4.0 features, compatibility, usage and test evidence. |
-| [Документация на русском](docs/release/kafka-gitops-v0.4.0-release-notes-ru.md) | Полное описание v0.4.0 на русском языке. |
+| [Release: v0.4.1](https://github.com/Hellfire-son/kafka-gitops/releases) | Universal JAR, EN/RU release-note assets and `SHA256SUMS`. |
+| [English Release Notes](docs/release/kafka-gitops-v0.4.1-release-notes-en.md) | Complete v0.4.1 features, compatibility, usage and test evidence. |
+| [Документация на русском](docs/release/kafka-gitops-v0.4.1-release-notes-ru.md) | Полное описание v0.4.1 на русском языке. |
 | [Installation and source build](docs/installation.md) | Java requirements, Gradle Wrapper and build instructions. |
 | [CHANGELOG](CHANGELOG.md) | Change history and migration from 0.3.1. |
 | [SECURITY](SECURITY.md) | Security policy, reporting guidance and dependency-risk boundaries. |
 | [CONTRIBUTING](CONTRIBUTING.md) | Contribution and review guidelines. |
 
-For final release status and live-test coverage, use the EN/RU release notes and
-final acceptance report linked above. Older preparation-status statements in
-other documents describe their recorded stage.
+For v0.4.0, see the [historical release notes](docs/release/kafka-gitops-v0.4.0-release-notes-en.md).
 
 ## Known Limitations
 
 - ADS 4.3.1 has not been tested on a real cluster; vendor-specific features and
   policies remain unverified.
-- The full SASL/TLS/Kerberos/OAuth integration matrix, managed Kafka/Confluent
-  Cloud and ACL enforcement acceptance are incomplete.
+- Managed Kafka and Confluent Cloud remain outside the live test matrix.
 - No production certification or complete native OS/CPU coverage is claimed.
   Large data volumes, sustained load, broker failures and recovery need more tests.
 - Partition decreases and RF execution with nonempty ELR/LastKnownELR are

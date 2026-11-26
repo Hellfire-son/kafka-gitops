@@ -1,23 +1,23 @@
 <!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
 # Quick Start
 
-This walkthrough uses Kafka GitOps **0.4.0**, **Java 21** and an existing local
+This walkthrough uses Kafka GitOps **0.4.1**, **Java 21** and an existing local
 Kafka cluster. It creates or updates a sample topic with ACL management skipped
 and deletion disabled. Use a non-production cluster and review the actual plan.
 
 ## 1. Download the JAR
 
-Download `kafka-gitops-all.jar` from the
-[v0.4.0 release](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0).
+Download `kafka-gitops-all.jar` from the v0.4.1 entry under
+[GitHub Releases](https://github.com/Hellfire-son/kafka-gitops/releases).
 Verify its SHA-256 using [installation instructions](installation.md), then run:
 
 ```bash
 java -jar kafka-gitops-all.jar --version
 ```
 
-The version must be `0.4.0`. A separate `kafka-gitops` launcher installation is
-not required. See the [English](release/kafka-gitops-v0.4.0-release-notes-en.md) /
-[Russian](release/kafka-gitops-v0.4.0-release-notes-ru.md) notes for compatibility.
+The version must be `0.4.1`. A separate `kafka-gitops` launcher installation is
+not required. See the [English](release/kafka-gitops-v0.4.1-release-notes-en.md) /
+[Russian](release/kafka-gitops-v0.4.1-release-notes-ru.md) notes for compatibility.
 
 ## 2. Prepare client.properties
 
@@ -78,6 +78,13 @@ config changes, warnings and blockers. Executable operations are saved as JSON
 only when planning succeeds. A blocked plan returns exit code 2 and leaves an
 existing output file untouched. Exit code 0 covers `PLAN_BUILT` and `NO_CHANGES`.
 
+In v0.4.1, `CREATE`, `UPDATE` and `DELETE` label the topic
+operations. ACL changes use `CREATE` and `DELETE`. `SUMMARY` reports counts by
+resource and `ACLs: SKIPPED` for this example. Detailed blocks for unchanged
+topics appear only when they have a warning or blocker. `--include-unchanged`
+still controls which entries are written to JSON. `Blocked topics` counts
+distinct topics and `Blocking diagnostics` counts individual findings.
+
 ## 6. Review before applying
 
 - Confirm the target cluster and every resource in the plan. This walkthrough
@@ -96,6 +103,20 @@ existing output file untouched. Exit code 0 covers `PLAN_BUILT` and `NO_CHANGES`
 ```bash
 java -jar kafka-gitops-all.jar --command-config client.properties --skip-acls --no-delete apply -p plan.json
 ```
+
+In v0.4.1 the apply report uses the same operation labels as plan. `Result`
+shows each resource's outcome. When a topic has several changes, the report
+also shows the outcome of each step. `PARTIAL` means some work completed before
+the resource was fully applied. `UNKNOWN` means the available evidence could
+not establish the result, for example after a timeout. `NOT_RUN` marks operations
+that were not reached. For saved JSON, `Unchanged topics: UNKNOWN` means that
+the total was unavailable from the apply run.
+
+The ACL deletion count comes from the bindings Kafka confirms it removed.
+Repeating a saved deletion after the binding is gone reports `NO_OP` and exits
+with code 0. If the partition count drifts from the saved plan before the write,
+the partition step reports `BLOCKED`, later operations report `NOT_RUN`, and
+the command exits with code 2. An unconfirmed submitted write reports `UNKNOWN`.
 
 RF apply rechecks permissions, cluster/topic identity, assignments, broker/rack
 health, leader/ISR, `min.insync.replicas`, ELR evidence and conflicting reassignments.

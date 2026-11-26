@@ -120,5 +120,5 @@ class TestKafkaService extends KafkaService {
     void createAcl(AclBinding acl) { acls.add(acl) }
 
     @Override
-    void deleteAcl(AclBinding acl) { acls.remove(acl) }
+    boolean deleteAcl(AclBinding acl) { acls.remove(acl) }
 }

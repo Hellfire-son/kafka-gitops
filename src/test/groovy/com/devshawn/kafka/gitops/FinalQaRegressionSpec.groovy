@@ -80,7 +80,8 @@ class FinalQaRegressionSpec extends Specification {
         then:
         result.code==2
         kafka.createdTopics.empty && kafka.operations.empty
-        !result.text.contains('Apply complete!')
+        !result.text.contains('Status: APPLY_COMPLETED')
+        result.text.contains('Status: APPLY_FAILED')
 
         where:
         rf << [0,-1,32768]
@@ -148,7 +149,7 @@ class FinalQaRegressionSpec extends Specification {
         then:
         result.code==0
         result.text.contains('Partitions: 4 -> 4')
-        result.text.contains('Replication: [1] -> 2')
+        result.text.contains('Replication factor: 1 -> 2')
         result.text.contains('unit.invalid:9092') || result.text.contains('Connecting')
         out.exists()
         fake.writeCalls==0

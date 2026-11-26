@@ -1,7 +1,7 @@
 <!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
 # Permissions
 
-Kafka GitOps 0.4.0 needs Kafka authorization for every read and write operation
+Kafka GitOps 0.4.1 needs Kafka authorization for every read and write operation
 in its chosen scope. A dedicated principal can be granted the required rights;
 superuser access is not mandatory for every deployment. Full authorization and
 ACL enforcement acceptance has not been completed for the release.

@@ -2,11 +2,10 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 # Installation and build
 
-Kafka GitOps **0.4.0** is published in the independent
+For Kafka GitOps **0.4.1**, use the matching entry under
+[GitHub Releases](https://github.com/Hellfire-son/kafka-gitops/releases) in the independent
 [Hellfire-son/kafka-gitops](https://github.com/Hellfire-son/kafka-gitops) repository.
-Use the [v0.4.0 release](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0)
-for downloads and the [English](release/kafka-gitops-v0.4.0-release-notes-en.md) /
-[Russian](release/kafka-gitops-v0.4.0-release-notes-ru.md) notes for tested behavior.
+See the [English](release/kafka-gitops-v0.4.1-release-notes-en.md) and [Russian](release/kafka-gitops-v0.4.1-release-notes-ru.md) notes.
 
 ## Requirements
 
@@ -20,20 +19,19 @@ for downloads and the [English](release/kafka-gitops-v0.4.0-release-notes-en.md)
 
 ## Published release files
 
-The v0.4.0 GitHub Release contains these four uploaded assets, in addition to
-GitHub's generated source archives:
+The v0.4.1 release asset set contains the following four files. GitHub also provides source archives.
 
 | File | Purpose |
 |---|---|
-| [kafka-gitops-all.jar](https://github.com/Hellfire-son/kafka-gitops/releases/download/v0.4.0/kafka-gitops-all.jar) | The universal runtime JAR. |
-| [English release notes](https://github.com/Hellfire-son/kafka-gitops/releases/download/v0.4.0/kafka-gitops-v0.4.0-release-notes-en.md) | Complete English release documentation. |
-| [Русские Release Notes](https://github.com/Hellfire-son/kafka-gitops/releases/download/v0.4.0/kafka-gitops-v0.4.0-release-notes-ru.md) | Полное описание выпуска на русском языке. |
-| [SHA256SUMS](https://github.com/Hellfire-son/kafka-gitops/releases/download/v0.4.0/SHA256SUMS) | SHA-256 for the JAR and both Markdown assets. |
+| `kafka-gitops-all.jar` | The universal runtime JAR. |
+| `kafka-gitops-v0.4.1-release-notes-en.md` | Complete English release documentation. |
+| `kafka-gitops-v0.4.1-release-notes-ru.md` | Полное описание выпуска на русском языке. |
+| `SHA256SUMS` | SHA-256 for the JAR and both Markdown assets. |
 
-The JAR is **26 018 771 bytes**. Its verified SHA-256 is:
+The JAR is **26,067,721 bytes**. Its verified SHA-256 is:
 
 ```text
-a11deccb969864be1cd30f93cddc4cbbe4f2f395a1f3cc6619400f25f4524f4b
+86d5228bc1b03e697fdab10cfa8bcb028a3ed9ef8304cd3f549e6c4acab89f05
 ```
 
 ### Linux and macOS
@@ -57,7 +55,7 @@ java -jar kafka-gitops-all.jar --version
 java -jar kafka-gitops-all.jar --help
 ```
 
-The version must be `0.4.0`. If all three files named in `SHA256SUMS` were
+The version must be `0.4.1`. If all three files named in `SHA256SUMS` were
 also downloaded, `sha256sum -c SHA256SUMS` verifies the complete set on Linux.
 
 ### Windows PowerShell
@@ -107,8 +105,8 @@ without `--no-delete`, plus fresh safety checks.
 ## Build from source
 
 Use JDK 21 and the checked-in Gradle Wrapper **9.9.1** with Shadow **9.6.1**.
-No installed Gradle is required. Tag `v0.4.0` identifies the original release
-source; `main` can contain later documentation changes. From the repository root:
+The wrapper supplies Gradle. Build from the source associated with `v0.4.1`.
+Run these commands from the repository root:
 
 ```bash
 ./gradlew --no-daemon --no-scan clean classes testClasses test shadowJar verifyReleaseArtifact buildExecutableJar buildRelease
@@ -128,7 +126,12 @@ The first build downloads the pinned wrapper and dependencies. Use `--offline`
 only when the required artifacts are cached. Java unit tests exclude external
 `*IntegrationSpec` suites; the Python guards and release verifier are offline
 checks. These commands do not start Docker/Kafka or perform cluster writes.
-External-cluster acceptance runners require separate authorization.
+The external IntegrationSpec suite runs separately against a dedicated disposable
+Kafka fixture. Configure it with `KAFKA_BOOTSTRAP_SERVERS` and any required
+`KAFKA_*` authentication settings. Set `GITOPS_INTEGRATION_CLUSTER_ID` to the
+fixture's cluster ID. The tests check that ID before seeding or clearing resources.
+Run one suite at a time against the fixture. The Confluent cp-kafka 7.9.11
+legacy fixture uses one broker with ACL support.
 
 ## Locally built artifacts
 
@@ -136,11 +139,10 @@ External-cluster acceptance runners require separate authorization.
 |---|---|
 | `build/libs/kafka-gitops-all.jar` | The only runtime JAR. |
 | `build/output/kafka-gitops` | POSIX launcher with the same JAR embedded. |
-| `build/distributions/kafka-gitops-0.4.0.zip` | POSIX launcher, notes and legal bundle. |
+| `build/distributions/kafka-gitops-0.4.1.zip` | POSIX launcher, EN/RU release notes and legal bundle for the local v0.4.1 build. |
 
-The Gradle-generated ZIP is a **local build output**, not an uploaded binary
-asset of the public v0.4.0 release. GitHub's generated source ZIP is a separate
-source archive. A locally built POSIX launcher can be run with `./kafka-gitops`;
+The Gradle-generated ZIP and POSIX launcher are local build outputs. GitHub
+provides its own source archives. A locally built POSIX launcher can be run with `./kafka-gitops`;
 Windows users can run the JAR directly.
 
 `verifyReleaseArtifact` checks licenses, reviewed dependency bytes, Java 21
@@ -151,4 +153,4 @@ redistributing it. Source or packaging changes require checksums for the resulti
 build; do not assume a new build matches the published artifact.
 
 Upstream Homebrew packages and Docker images are not distributions of this
-independent v0.4.0 JAR.
+independent v0.4.1 JAR.

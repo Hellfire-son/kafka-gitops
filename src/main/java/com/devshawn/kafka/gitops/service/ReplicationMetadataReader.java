@@ -5,20 +5,23 @@ import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot.*;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence;
 import com.devshawn.kafka.gitops.domain.metadata.CapabilityAssessment;
+import com.devshawn.kafka.gitops.domain.plan.PartitionReplicaAssignment;
+import com.devshawn.kafka.gitops.domain.plan.TopicReplicationPlan;
 import static com.devshawn.kafka.gitops.domain.metadata.CapabilityAssessment.Capability.*;
 import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 
 import java.util.*;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 import static com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot.Observation.*;
 
@@ -34,24 +37,35 @@ final class ReplicationMetadataReader {
 
     static ReplicationClusterSnapshot read(Admin admin, Set<String> requested, int timeoutMs, boolean preflight)
             throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+        return read(admin, requested, AdminReadDeadline.forSnapshot(timeoutMs), preflight, Map.of());
+    }
+
+    static ReplicationClusterSnapshot readForVerification(Admin admin, Set<String> requested,
+                                                           Map<String, TopicReplicationPlan> terminalPlans, AdminReadDeadline deadline)
+            throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
+        return read(admin, requested, deadline, true, terminalPlans);
+    }
+
+    private static ReplicationClusterSnapshot read(Admin admin, Set<String> requested, AdminReadDeadline deadline, boolean preflight,
+                                                   Map<String, TopicReplicationPlan> terminalPlans)
+            throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
         FeatureMetadata features = features(admin, deadline);
-        DescribeClusterResult cluster = admin.describeCluster(new DescribeClusterOptions().timeoutMs(ms(deadline)));
-        String clusterId = await(cluster.clusterId(), deadline);
-        Map<Integer, Node> nodes = nodes(await(cluster.nodes(), deadline));
-        Map<String, TopicDescription> descriptions = await(admin.describeTopics(new TreeSet<>(requested),
-                new DescribeTopicsOptions().timeoutMs(ms(deadline))).allTopicNames(), deadline);
+        DescribeClusterResult cluster = admin.describeCluster(new DescribeClusterOptions().timeoutMs(deadline.timeoutMs()));
+        String clusterId = deadline.await(cluster.clusterId());
+        Map<Integer, Node> nodes = nodes(deadline.await(cluster.nodes()));
+        Map<String, TopicDescription> descriptions = deadline.await(admin.describeTopics(new TreeSet<>(requested),
+                new DescribeTopicsOptions().timeoutMs(deadline.timeoutMs())).allTopicNames());
         require(descriptions.keySet().equals(requested), "RF topic metadata is incomplete.");
 
-        Map<TopicPartition, PartitionReassignment> active = await(admin.listPartitionReassignments(
-                new ListPartitionReassignmentsOptions().timeoutMs(ms(deadline))).reassignments(), deadline);
+        Map<TopicPartition, PartitionReassignment> active = deadline.await(admin.listPartitionReassignments(
+                new ListPartitionReassignmentsOptions().timeoutMs(deadline.timeoutMs())).reassignments());
         List<ConfigResource> resources = new ArrayList<>();
         requested.stream().sorted().forEach(name -> resources.add(new ConfigResource(ConfigResource.Type.TOPIC, name)));
         nodes.keySet().forEach(id -> resources.add(new ConfigResource(ConfigResource.Type.BROKER, id.toString())));
         Map<ConfigResource, KafkaFuture<Config>> configs = admin.describeConfigs(resources,
-                new DescribeConfigsOptions().includeSynonyms(true).timeoutMs(ms(deadline))).values();
+                new DescribeConfigsOptions().includeSynonyms(true).timeoutMs(deadline.timeoutMs())).values();
         Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> directories = admin.describeLogDirs(nodes.keySet(),
-                new DescribeLogDirsOptions().timeoutMs(ms(deadline))).descriptions();
+                new DescribeLogDirsOptions().timeoutMs(deadline.timeoutMs())).descriptions();
 
         Map<Integer, Config> firstBrokerConfigs = new TreeMap<>();
         Map<Integer, Broker> brokers = new TreeMap<>();
@@ -66,7 +80,7 @@ final class ReplicationMetadataReader {
             OptionalLong usable = OptionalLong.empty();
             try {
                 KafkaFuture<Map<String, LogDirDescription>> future = directories.get(node.id());
-                Map<String, LogDirDescription> dirs = future == null ? null : await(future, deadline);
+                Map<String, LogDirDescription> dirs = future == null ? null : deadline.await(future);
                 if (dirs != null && !dirs.isEmpty()) {
                     reachable = VERIFIED;
                     storage = dirs.values().stream().anyMatch(d -> d == null || d.error() != null) ? UNAVAILABLE : VERIFIED;
@@ -89,6 +103,7 @@ final class ReplicationMetadataReader {
                     }
                 }
             } catch (ExecutionException ex) {
+                if (deadline.verification()) throw ex;
                 Throwable cause = ex.getCause();
                 if (cause instanceof TimeoutException || cause instanceof BrokerNotAvailableException) {
                     reachable = UNAVAILABLE;
@@ -127,20 +142,23 @@ final class ReplicationMetadataReader {
         for (String name : new TreeSet<>(requested)) {
             TopicDescription description = descriptions.get(name);
             Config config = optional(configs.get(new ConfigResource(ConfigResource.Type.TOPIC, name)), deadline);
-            List<Partition> partitions = description.partitions().stream().sorted(Comparator.comparingInt(p -> p.partition()))
-                    .map(ElrSafetyPolicy::partition).toList();
-            topics.put(name, new Topic(description.topicId().toString(), partitions, minIsr(config)));
+            topics.put(name, topic(description, minIsr(config)));
         }
         // Detect obvious drift during collection. This is not an atomic snapshot or proof of execution readiness.
-        DescribeClusterResult after = admin.describeCluster(new DescribeClusterOptions().timeoutMs(ms(deadline)));
-        require(Objects.equals(clusterId, await(after.clusterId(), deadline))
-                && nodes.equals(nodes(await(after.nodes(), deadline))), "RF cluster metadata changed while collecting the snapshot. Re-plan.");
-        Map<String, TopicDescription> fresh = await(admin.describeTopics(new TreeSet<>(requested),
-                new DescribeTopicsOptions().timeoutMs(ms(deadline))).allTopicNames(), deadline);
-        require(fresh.keySet().equals(requested) && requested.stream().allMatch(name -> sameTopic(descriptions.get(name), fresh.get(name))),
+        DescribeClusterResult after = admin.describeCluster(new DescribeClusterOptions().timeoutMs(deadline.timeoutMs()));
+        require(Objects.equals(clusterId, deadline.await(after.clusterId()))
+                && nodes.equals(nodes(deadline.await(after.nodes()))), "RF cluster metadata changed while collecting the snapshot. Re-plan.");
+        Map<String, TopicDescription> fresh = deadline.await(admin.describeTopics(new TreeSet<>(requested),
+                new DescribeTopicsOptions().timeoutMs(deadline.timeoutMs())).allTopicNames());
+        require(fresh.keySet().equals(requested) && requested.stream()
+                        .allMatch(name -> sameTopic(descriptions.get(name), fresh.get(name), terminalPlans.get(name))),
                 "RF topic metadata changed while collecting the snapshot. Re-plan.");
-        Map<TopicPartition, PartitionReassignment> finalActive = await(admin.listPartitionReassignments(
-                new ListPartitionReassignmentsOptions().timeoutMs(ms(deadline))).reassignments(), deadline);
+        if (!terminalPlans.isEmpty()) {
+            // Report the second observation. Any changes other than the approved ISR transition were rejected above.
+            topics.replaceAll((name, previous) -> topic(fresh.get(name), previous.minInSyncReplicas()));
+        }
+        Map<TopicPartition, PartitionReassignment> finalActive = deadline.await(admin.listPartitionReassignments(
+                new ListPartitionReassignmentsOptions().timeoutMs(deadline.timeoutMs())).reassignments());
         require(active.keySet().equals(finalActive.keySet()), "Active reassignment changed during RF metadata collection. Re-plan.");
         boolean confirmedZooKeeper = nodes.keySet().stream().allMatch(id -> KafkaCapabilities.zooKeeper(firstBrokerConfigs.get(id)));
         // Preview retains the feature conclusion, but never a fresh execution authorization.
@@ -149,7 +167,7 @@ final class ReplicationMetadataReader {
         if (preflight) {
             FeatureMetadata afterFeatures = features(admin, deadline);
             Map<ConfigResource, KafkaFuture<Config>> finalConfigs = admin.describeConfigs(resources,
-                    new DescribeConfigsOptions().includeSynonyms(true).timeoutMs(ms(deadline))).values();
+                    new DescribeConfigsOptions().includeSynonyms(true).timeoutMs(deadline.timeoutMs())).values();
             Map<String, Observation> stableTopics = new TreeMap<>();
             for (String name : new TreeSet<>(requested)) {
                 OptionalInt latest = minIsr(optional(finalConfigs.get(new ConfigResource(ConfigResource.Type.TOPIC, name)), deadline));
@@ -204,31 +222,68 @@ final class ReplicationMetadataReader {
                     && zkBefore == zkAfter) stableFeatures = VERIFIED;
             // Neither generic placement eligibility nor required per-replica disk reserve can be proven here.
             // Deliberately do not synthesize VERIFIED admissions from Node presence or positive usableBytes.
-            evidence = new ReplicationSafetyEvidence(OptionalLong.of(System.nanoTime()), mode,
+            evidence = new ReplicationSafetyEvidence(OptionalLong.of(deadline.now()), mode,
                     stableFeatures, stableTopics, stableCordoning, Map.of());
         }
-        return new ReplicationClusterSnapshot(clusterId, brokers, topics, finalActive.keySet(), VERIFIED, load, VERIFIED, evidence);
+        var snapshot = new ReplicationClusterSnapshot(clusterId, brokers, topics, finalActive.keySet(), VERIFIED, load, VERIFIED, evidence);
+        if (deadline.verification()) deadline.check();
+        return snapshot;
     }
 
-    private static FeatureMetadata features(Admin admin, long deadline) throws InterruptedException, java.util.concurrent.TimeoutException {
+    private static FeatureMetadata features(Admin admin, AdminReadDeadline deadline)
+            throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
         try {
-            return await(admin.describeFeatures(new DescribeFeaturesOptions().timeoutMs(ms(deadline))).featureMetadata(), deadline);
-        } catch (ExecutionException | RuntimeException ignored) {
-            return null; // Unsupported, authorization failure or unavailable feature state is UNKNOWN.
+            return deadline.await(admin.describeFeatures(new DescribeFeaturesOptions().timeoutMs(deadline.timeoutMs())).featureMetadata());
+        } catch (ExecutionException | RuntimeException ex) {
+            Throwable cause = ex instanceof ExecutionException ? ex.getCause() : ex;
+            // Retain the legacy capability fallback for an unsupported features API.
+            if (deadline.verification() && !(cause instanceof UnsupportedVersionException)) throw ex;
+            return null;
         }
     }
 
-    private static boolean sameTopic(TopicDescription before, TopicDescription after) {
+    private static Topic topic(TopicDescription description, OptionalInt minIsr) {
+        List<Partition> partitions = description.partitions().stream().sorted(Comparator.comparingInt(TopicPartitionInfo::partition))
+                .map(ElrSafetyPolicy::partition).toList();
+        return new Topic(description.topicId().toString(), partitions, minIsr);
+    }
+
+    private static boolean sameTopic(TopicDescription before, TopicDescription after, TopicReplicationPlan terminalPlan) {
         if (before == null || after == null || !before.topicId().equals(after.topicId())
                 || !before.name().equals(after.name()) || before.partitions().size() != after.partitions().size()) {
             return false;
         }
+        Map<Integer, PartitionReplicaAssignment> assignments = new HashMap<>();
+        if (terminalPlan != null) {
+            terminalPlan.getAssignments().forEach(assignment -> assignments.put(assignment.getPartition(), assignment));
+            if (!hasAllPartitions(before, assignments.keySet()) || !hasAllPartitions(after, assignments.keySet())) return false;
+        }
         return before.partitions().stream().allMatch(p -> after.partitions().stream().anyMatch(f ->
                 p.partition() == f.partition() && Objects.equals(p.leader(), f.leader())
                         && p.replicas().stream().map(Node::id).toList().equals(f.replicas().stream().map(Node::id).toList())
-                        && new HashSet<>(p.isr().stream().map(Node::id).toList()).equals(new HashSet<>(f.isr().stream().map(Node::id).toList()))
+                        && compatibleIsr(p, f, assignments.get(p.partition()))
                         && ElrSafetyPolicy.partition(p).elr().equals(ElrSafetyPolicy.partition(f).elr())
                         && ElrSafetyPolicy.partition(p).lastKnownElr().equals(ElrSafetyPolicy.partition(f).lastKnownElr())));
+    }
+
+    private static boolean hasAllPartitions(TopicDescription description, Set<Integer> expected) {
+        Set<Integer> ids = new HashSet<>();
+        return description.partitions().stream().allMatch(p -> p != null && ids.add(p.partition())) && ids.equals(expected);
+    }
+
+    private static boolean compatibleIsr(TopicPartitionInfo before, TopicPartitionInfo after, PartitionReplicaAssignment terminalAssignment) {
+        Set<Integer> first = new HashSet<>(before.isr().stream().map(Node::id).toList());
+        Set<Integer> second = new HashSet<>(after.isr().stream().map(Node::id).toList());
+        if (terminalAssignment != null && (first.size() != before.isr().size() || second.size() != after.isr().size())) return false;
+        if (first.equals(second)) return true;
+        return terminalAssignment != null && terminalIsr(terminalAssignment, before) && terminalIsr(terminalAssignment, after);
+    }
+
+    private static boolean terminalIsr(PartitionReplicaAssignment assignment, TopicPartitionInfo observation) {
+        var part = ElrSafetyPolicy.partition(observation);
+        List<Integer> target = assignment.getTargetReplicas();
+        return AdminReassignmentExecutor.removedReplicasInIsr(assignment, part)
+                || (part.replicas().equals(target) && part.isr().equals(new HashSet<>(target)));
     }
 
     private static Map<Integer, Node> nodes(Collection<Node> values) {
@@ -264,30 +319,14 @@ final class ReplicationMetadataReader {
         return OptionalInt.empty();
     }
 
-    private static Config optional(KafkaFuture<Config> future, long deadline)
-            throws InterruptedException, java.util.concurrent.TimeoutException {
+    private static Config optional(KafkaFuture<Config> future, AdminReadDeadline deadline)
+            throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
         try {
-            return future == null ? null : await(future, deadline);
-        } catch (ExecutionException ignored) {
+            return future == null ? null : deadline.await(future);
+        } catch (ExecutionException ex) {
+            if (deadline.verification()) throw ex;
             return null;
         }
-    }
-
-    private static <T> T await(KafkaFuture<T> future, long deadline)
-            throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
-        return future.get(remaining(deadline), TimeUnit.NANOSECONDS);
-    }
-
-    private static long remaining(long deadline) throws java.util.concurrent.TimeoutException {
-        long value = deadline - System.nanoTime();
-        if (value <= 0) {
-            throw new java.util.concurrent.TimeoutException();
-        }
-        return value;
-    }
-
-    private static int ms(long deadline) throws java.util.concurrent.TimeoutException {
-        return (int) Math.max(1, TimeUnit.NANOSECONDS.toMillis(remaining(deadline)));
     }
 
     private static void require(boolean condition, String message) {

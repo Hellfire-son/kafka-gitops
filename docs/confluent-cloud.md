@@ -1,14 +1,11 @@
 <!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
 # Confluent Cloud and legacy account integration
 
-Kafka GitOps 0.4.0 uses Kafka Admin APIs for topic/configuration and ACL operations.
-**Confluent Cloud, its full security matrix and ACL enforcement have not received
-complete live integration acceptance for this release.** The isolated Apache
-Kafka trials are not evidence of vendor certification.
+Kafka GitOps 0.4.1 uses Kafka Admin APIs for topic/configuration and ACL operations.
+Round 3 verified SASL/PLAIN and ACL enforcement on local Confluent cp-kafka
+7.9.11. Confluent Cloud and its security matrix were outside the live tests.
 
-Install the Java 21 [universal JAR](installation.md) from the
-[v0.4.0 release](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0).
-Upstream Docker images are not the independent v0.4.0 distribution.
+Install the v0.4.1 [universal JAR](installation.md) and run it with Java 21.
 
 ## Kafka client configuration
 

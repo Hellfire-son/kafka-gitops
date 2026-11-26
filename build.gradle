@@ -30,7 +30,7 @@ plugins {
 }
 
 group = 'com.devshawn'
-version = '0.4.0'
+version = '0.4.1'
 
 application {
     mainClass = 'com.devshawn.kafka.gitops.MainCommand'
@@ -312,8 +312,13 @@ tasks.register('buildRelease', Zip) {
                 eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('lf'), fixlast: false)
     }
     from 'legal/THIRD-PARTY-NOTICES'
-    from('docs/release/v0.4.0-release-notes.md') {
+    from("docs/release/kafka-gitops-v${project.version}-release-notes-en.md") {
         rename { 'RELEASE-NOTES.md' }
+        filter(org.apache.tools.ant.filters.FixCrLfFilter,
+                eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('lf'), fixlast: false)
+    }
+    from("docs/release/kafka-gitops-v${project.version}-release-notes-ru.md") {
+        rename { 'RELEASE-NOTES-ru.md' }
         filter(org.apache.tools.ant.filters.FixCrLfFilter,
                 eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('lf'), fixlast: false)
     }

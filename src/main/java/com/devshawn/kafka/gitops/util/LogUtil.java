@@ -46,8 +46,10 @@ public final class LogUtil {
         printValidationResult(error.getMessage(), false);
         String code = error instanceof com.devshawn.kafka.gitops.exception.ReplicationExecutionException ? "APPLY_FAILED"
                 : error instanceof com.devshawn.kafka.gitops.exception.ReplicationPreflightException ? "RF_PREFLIGHT_BLOCKED" : "STATE_VALIDATION_FAILED";
+        String state = error instanceof com.devshawn.kafka.gitops.exception.ReplicationExecutionException execution
+                ? execution.getResult().state().name() : "BLOCKED";
         System.out.println("[ERROR] " + code + "; Resource: " + (applying ? "apply" : "plan")
-                + "; Actual: INVALID_OR_INCOMPLETE; Required: valid input and all mandatory preconditions; State: BLOCKED.");
+                + "; Actual: INVALID_OR_INCOMPLETE; Required: valid input and all mandatory preconditions; State: " + state + ".");
         System.out.println("  Action: resolve the reported condition, inspect Kafka state after any apply attempt, and re-plan.");
     }
 

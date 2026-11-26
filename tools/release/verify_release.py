@@ -13,7 +13,7 @@ import tempfile
 import zipfile
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-VERSION = '0.4.0'
+VERSION = '0.4.1'
 JAR = REPO / 'build/libs/kafka-gitops-all.jar'
 ENV = {k: v for k, v in os.environ.items() if not k.startswith(('KAFKA_', 'CCLOUD_'))}
 
@@ -84,6 +84,9 @@ def artifact_checks():
         assert archive.read('kafka-gitops') == launcher
         assert (archive.getinfo('kafka-gitops').external_attr >> 16) & 0o777 == 0o755
         assert archive.read('LICENSE') == project_license
+        for lang, name in [('en', 'RELEASE-NOTES.md'), ('ru', 'RELEASE-NOTES-ru.md')]:
+            source = REPO / 'docs' / 'release' / f'kafka-gitops-v{VERSION}-release-notes-{lang}.md'
+            assert archive.read(name) == source.read_bytes().replace(b'\r\n', b'\n')
         for c in legal['components']:
             for name, expected in c['files'].items():
                 assert sha(archive.read('legal/META-INF/licenses/' + c['directory'] + '/' + name)) == expected
@@ -108,7 +111,7 @@ def main():
             assert result.returncode == expected, (name, result.returncode)
             assert contains is None or contains in output, name
             if expected:
-                assert 'Apply complete!' not in output and '[SUCCESS]' not in output, name
+                assert 'Status: APPLY_COMPLETED' not in output and 'Apply complete!' not in output and '[SUCCESS]' not in output, name
             checks.append(name)
 
         cli('help', ['--help'], 0, 'Usage:')

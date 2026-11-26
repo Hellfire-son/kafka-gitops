@@ -2,6 +2,8 @@
 package com.devshawn.kafka.gitops.manager;
 
 import com.devshawn.kafka.gitops.config.ManagerConfig;
+import com.devshawn.kafka.gitops.domain.plan.ApplyReport;
+import com.devshawn.kafka.gitops.domain.plan.ApplyReport.Step;
 import com.devshawn.kafka.gitops.domain.plan.DesiredPlan;
 import com.devshawn.kafka.gitops.domain.plan.TopicConfigPlan;
 import com.devshawn.kafka.gitops.domain.plan.TopicPlan;
@@ -24,6 +26,9 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.*;
+import java.util.function.BooleanSupplier;
+
+import static com.devshawn.kafka.gitops.domain.plan.ApplyReport.Result.*;
 
 public class ApplyManager {
 
@@ -43,14 +48,18 @@ public class ApplyManager {
     }
 
     public void applyPlan(DesiredPlan plan) {
+        applyPlan(plan, null);
+    }
+
+    public void applyPlan(DesiredPlan plan, ApplyReport report) {
         boolean rf = plan.getTopicPlans().stream().anyMatch(t -> t.getReplicationPlan().isPresent());
         validateReplicationPermissions(plan);
         if (replicationApplication == null || !rf || managerConfig.isSkipTopicsDisabled()) {
-            if (!managerConfig.isSkipTopicsDisabled()) applyTopics(plan);
-            if (!managerConfig.isSkipAclsDisabled()) applyAcls(plan);
+            if (!managerConfig.isSkipTopicsDisabled()) applyTopics(plan, report);
+            if (!managerConfig.isSkipAclsDisabled()) applyAcls(plan, report);
             return;
         }
-        applyWithReplication(plan);
+        applyWithReplication(plan, report);
     }
 
     /** Permission-only gate: safe before no-change filtering, metadata access or any write. */
@@ -68,7 +77,7 @@ public class ApplyManager {
         }
     }
 
-    private void applyWithReplication(DesiredPlan plan) {
+    private void applyWithReplication(DesiredPlan plan, ApplyReport report) {
         validatePermissions();
         PlanValidation.validate(plan);
         var permissions = new ReplicationSafetyPolicy.Permissions(managerConfig.isManageReplicationRequested(),
@@ -82,76 +91,96 @@ public class ApplyManager {
             throw new ReplicationPreflightException(results);
         }
         // Other partition prerequisites must also pass before RF writes can start.
-        preflightPartitions(plan);
+        preflightPartitions(plan, report);
         ReassignmentExecutor.ExecutionResult result = replicationApplication.apply(topics, permissions);
         if (result.state() != ReassignmentExecutor.State.COMPLETED) {
             throw new ReplicationExecutionException(result, ReplicationExecutionException.Phase.EXECUTION);
         }
+        if (report != null) report.recordReplication(result, true, true);
         try {
-            applyTopicOperations(plan, true);
-            if (!managerConfig.isSkipAclsDisabled()) applyAclOperations(plan);
+            applyTopicOperations(plan, true, report);
+            if (!managerConfig.isSkipAclsDisabled()) applyAclOperations(plan, report);
         } catch (RuntimeException ex) {
-            throw new ReplicationExecutionException(result, ReplicationExecutionException.Phase.FOLLOWUP);
+            var stale = ex instanceof KafkaExecutionException kafka
+                    && kafka.getCode() == KafkaExecutionException.Code.PARTITION_PLAN_STALE ? kafka : null;
+            throw new ReplicationExecutionException(result, ReplicationExecutionException.Phase.FOLLOWUP, stale);
         }
     }
 
     public void applyTopics(DesiredPlan desiredPlan) {
+        applyTopics(desiredPlan, null);
+    }
+
+    private void applyTopics(DesiredPlan desiredPlan, ApplyReport report) {
         validatePermissions();
         if (managerConfig.isSkipTopicsDisabled()) {
             return;
         }
         PlanValidation.validate(desiredPlan);
         preflightReplication(desiredPlan);
-        preflightPartitions(desiredPlan);
-        applyTopicOperations(desiredPlan, false);
+        preflightPartitions(desiredPlan, report);
+        applyTopicOperations(desiredPlan, false, report);
     }
 
-    private void preflightPartitions(DesiredPlan desiredPlan) {
+    private void preflightPartitions(DesiredPlan desiredPlan, ApplyReport report) {
         // Check all partition preconditions before any topic is created, deleted or reconfigured.
         List<String> names = desiredPlan.getTopicPlans().stream().filter(t -> t.getPartitionPlan().isPresent())
                 .map(TopicPlan::getName).toList();
-        Map<String, TopicDescription> descriptions = kafkaService.describeTopics(names);
+        Map<String, TopicDescription> descriptions;
+        try {
+            descriptions = kafkaService.describeTopics(names);
+        } catch (KafkaExecutionException ex) {
+            if (report != null) report.blockPartitionPreflight(null);
+            throw ex;
+        }
         desiredPlan.getTopicPlans().forEach(topic -> topic.getPartitionPlan().ifPresent(partitions -> {
             TopicDescription current = descriptions.get(topic.getName());
             if (current == null || current.partitions().isEmpty()) {
+                if (report != null) report.blockPartitionPreflight(topic.getName());
                 throw new KafkaExecutionException("Partition preflight failed.", "Missing metadata for topic " + topic.getName() + ". Re-plan before retrying.");
             }
             int count = current.partitions().size();
             if (count != partitions.getPreviousCount() && count != partitions.getTargetCount()) {
+                if (report != null) report.blockPartitionPreflight(topic.getName());
                 throw new KafkaExecutionException("Partition plan is stale.", "Topic " + topic.getName() + " has "
                         + count + " partitions; expected " + partitions.getPreviousCount() + " or already "
-                        + partitions.getTargetCount() + ". Re-plan before retrying.");
+                        + partitions.getTargetCount() + ". Re-plan before retrying.",
+                        KafkaExecutionException.Code.PARTITION_PLAN_STALE, KafkaExecutionException.WriteOutcome.NOT_SENT);
             }
             topic.getTopicDetails().ifPresent(details -> LogUtil.printReplicationWarning(topic.getName(), details, current));
         }));
     }
 
-    private void applyTopicOperations(DesiredPlan desiredPlan, boolean replicationCompleted) {
-        desiredPlan.getTopicPlans().forEach(topicPlan -> {
-            if (topicPlan.getAction() == PlanAction.ADD) {
-                LogUtil.printTopicPreApply(topicPlan);
-                kafkaService.createTopic(topicPlan.getName(), topicPlan.getTopicDetails().orElseThrow());
-                LogUtil.printPostApply();
-            } else if (topicPlan.getAction() == PlanAction.UPDATE) {
-                LogUtil.printTopicPreApply(topicPlan, replicationCompleted && topicPlan.getReplicationPlan().isPresent());
+    private void applyTopicOperations(DesiredPlan desiredPlan, boolean replicationCompleted, ApplyReport report) {
+        for (TopicPlan topicPlan : desiredPlan.getTopicPlans()) {
+            var action = topicPlan.getAction();
+            if (action == PlanAction.NO_CHANGE || (action == PlanAction.REMOVE && managerConfig.isDeleteDisabled())) continue;
+            var change = report == null ? null : report.topic(topicPlan.getName());
+            if (change == null) LogUtil.printTopicPreApply(topicPlan, replicationCompleted && topicPlan.getReplicationPlan().isPresent());
+
+            if (action == PlanAction.ADD) {
+                execute(change == null ? null : change.lifecycle(),
+                        () -> kafkaService.createTopic(topicPlan.getName(), topicPlan.getTopicDetails().orElseThrow()));
+            } else if (action == PlanAction.UPDATE) {
                 topicPlan.getPartitionPlan().ifPresent(partitions -> {
                     // Re-check immediately before the write; the service also verifies the resulting metadata.
-                    boolean changed = kafkaService.increaseTopicPartitions(topicPlan.getName(), partitions.getPreviousCount(),
-                            partitions.getTargetCount());
-                    if (!changed) {
+                    boolean changed = execute(change == null ? null : change.partitions(),
+                            () -> kafkaService.increaseTopicPartitions(topicPlan.getName(), partitions.getPreviousCount(), partitions.getTargetCount()));
+                    if (!changed && change == null) {
                         System.out.printf("Topic %s already has %s partitions; partition change is a no-op.%n",
                                 topicPlan.getName(), partitions.getTargetCount());
                     }
                 });
-                topicPlan.getTopicConfigPlans().stream().filter(c -> c.getAction() != PlanAction.NO_CHANGE)
-                        .forEach(topicConfigPlan -> applyTopicConfiguration(topicPlan, topicConfigPlan));
-                LogUtil.printPostApply();
-            } else if (topicPlan.getAction() == PlanAction.REMOVE && !managerConfig.isDeleteDisabled()) {
-                LogUtil.printTopicPreApply(topicPlan);
-                kafkaService.deleteTopic(topicPlan.getName());
-                LogUtil.printPostApply();
+                int index = 0;
+                for (TopicConfigPlan config : topicPlan.getTopicConfigPlans()) {
+                    if (config.getAction() == PlanAction.NO_CHANGE) continue;
+                    execute(change == null ? null : change.configs().get(index++).step(), () -> applyTopicConfiguration(topicPlan, config));
+                }
+            } else if (action == PlanAction.REMOVE) {
+                execute(change == null ? null : change.lifecycle(), () -> kafkaService.deleteTopic(topicPlan.getName()));
             }
-        });
+            if (change == null) LogUtil.printPostApply();
+        }
     }
 
     private void applyTopicConfiguration(TopicPlan topicPlan, TopicConfigPlan topicConfigPlan) {
@@ -176,6 +205,10 @@ public class ApplyManager {
     }
 
     public void applyAcls(DesiredPlan desiredPlan) {
+        applyAcls(desiredPlan, null);
+    }
+
+    private void applyAcls(DesiredPlan desiredPlan, ApplyReport report) {
         validatePermissions();
         if (desiredPlan.getTopicPlans().stream().anyMatch(t -> t.getReplicationPlan().isPresent())
                 && desiredPlan.getAclPlans().stream().anyMatch(a -> a.getAction() == PlanAction.ADD
@@ -183,21 +216,49 @@ public class ApplyManager {
             PlanValidation.validate(desiredPlan);
             preflightReplication(desiredPlan);
         }
-        applyAclOperations(desiredPlan);
+        applyAclOperations(desiredPlan, report);
     }
 
-    private void applyAclOperations(DesiredPlan desiredPlan) {
-        desiredPlan.getAclPlans().forEach(aclPlan -> {
-            if (aclPlan.getAction() == PlanAction.ADD) {
-                LogUtil.printAclPreApply(aclPlan);
-                kafkaService.createAcl(aclPlan.getAclDetails().toAclBinding());
-                LogUtil.printPostApply();
-            } else if (aclPlan.getAction() == PlanAction.REMOVE && !managerConfig.isDeleteDisabled()) {
-                LogUtil.printAclPreApply(aclPlan);
-                kafkaService.deleteAcl(aclPlan.getAclDetails().toAclBinding());
-                LogUtil.printPostApply();
+    private void applyAclOperations(DesiredPlan desiredPlan, ApplyReport report) {
+        int index = 0;
+        for (var acl : desiredPlan.getAclPlans()) {
+            var action = acl.getAction();
+            if (action != PlanAction.ADD && (action != PlanAction.REMOVE || managerConfig.isDeleteDisabled())) continue;
+            Step step = report == null ? null : report.acls().get(index++).step();
+            if (step == null) LogUtil.printAclPreApply(acl);
+            if (action == PlanAction.ADD) {
+                execute(step, () -> kafkaService.createAcl(acl.getAclDetails().toAclBinding()));
+            } else {
+                boolean deleted = execute(step, () -> kafkaService.deleteAcl(acl.getAclDetails().toAclBinding()));
+                if (!deleted && step == null) {
+                    System.out.println("ACL already absent; no change.");
+                    continue;
+                }
             }
-        });
+            if (step == null) LogUtil.printPostApply();
+        }
+    }
+
+    private static void execute(Step step, Runnable action) {
+        execute(step, () -> { action.run(); return true; });
+    }
+
+    private static boolean execute(Step step, BooleanSupplier action) {
+        try {
+            boolean changed = action.getAsBoolean();
+            if (step != null) step.record(changed ? SUCCESS : NO_OP);
+            return changed;
+        } catch (RuntimeException error) {
+            if (step != null) step.record(error instanceof KafkaExecutionException kafka ? switch (kafka.getWriteOutcome()) {
+                case CONFIRMED -> SUCCESS;
+                case NO_OP -> NO_OP;
+                case REJECTED -> FAILED;
+                case NOT_SENT -> BLOCKED;
+                case PARTIAL -> PARTIAL;
+                case UNKNOWN -> UNKNOWN;
+            } : UNKNOWN);
+            throw error;
+        }
     }
 
     private void validatePermissions() {

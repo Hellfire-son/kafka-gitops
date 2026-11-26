@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.devshawn.kafka.gitops.service;
 
+import com.devshawn.kafka.gitops.domain.metadata.CapabilityAssessment;
 import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot;
+import com.devshawn.kafka.gitops.domain.metadata.ReplicationClusterSnapshot.Partition;
 import com.devshawn.kafka.gitops.domain.plan.PartitionReplicaAssignment;
 import com.devshawn.kafka.gitops.domain.plan.ReplicationSafetyResult;
+import com.devshawn.kafka.gitops.domain.plan.TopicReplicationPlan;
+import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
@@ -14,6 +18,8 @@ import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.*;
@@ -31,7 +37,25 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
     @FunctionalInterface
     interface SnapshotReader {
         ReplicationClusterSnapshot read(Admin admin, Set<String> topics, int timeoutMs) throws Exception;
+
+        default ReplicationClusterSnapshot readForVerification(Admin admin, Set<String> topics,
+                                                               Map<String, TopicReplicationPlan> terminalPlans, AdminReadDeadline deadline)
+                throws Exception {
+            return read(admin, topics, deadline.timeoutMs());
+        }
     }
+
+    static final SnapshotReader LIVE_SNAPSHOTS = new SnapshotReader() {
+        @Override public ReplicationClusterSnapshot read(Admin admin, Set<String> topics, int timeoutMs) throws Exception {
+            return ReplicationMetadataReader.read(admin, topics, timeoutMs, true);
+        }
+
+        @Override public ReplicationClusterSnapshot readForVerification(Admin admin, Set<String> topics,
+                                                                        Map<String, TopicReplicationPlan> terminalPlans,
+                                                                        AdminReadDeadline deadline) throws Exception {
+            return ReplicationMetadataReader.readForVerification(admin, topics, terminalPlans, deadline);
+        }
+    };
 
     record Settings(int batchSize, Duration rpcTimeout, Duration pollInterval) {
         Settings {
@@ -49,13 +73,14 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
     private final TimeSource time;
     private final SnapshotReader snapshots;
     private final ReplicationSafetyPolicy policy = new ReplicationSafetyPolicy();
+    private static final Logger LOG = LoggerFactory.getLogger(AdminReassignmentExecutor.class);
     private static final Comparator<TopicPartition> ORDER = Comparator.comparing(TopicPartition::topic).thenComparingInt(TopicPartition::partition);
 
     AdminReassignmentExecutor(Admin admin) {
         this(admin, new Settings(100, Duration.ofSeconds(10), Duration.ofMillis(100)), new TimeSource() {
             public long nanoTime() { return System.nanoTime(); }
             public void pause(long nanos) throws InterruptedException { TimeUnit.NANOSECONDS.sleep(nanos); }
-        }, (session, topics, timeout) -> ReplicationMetadataReader.read(session, topics, timeout, true));
+        }, LIVE_SNAPSHOTS);
     }
 
     /** Package-local injection for fake Admin, trusted test observations and monotonic test time. */
@@ -184,32 +209,144 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
         // Metadata fallback can read a lagging broker immediately after another broker reports
         // completion. Only read again, within one RPC window and the original operation deadline.
         // No submission, target change or relaxation of the terminal proof takes place here.
-        long verificationDeadline = rpcDeadline(request.deadlineNanos());
+        var verificationDeadline = AdminReadDeadline.forVerification(time::nanoTime, request.deadlineNanos(), settings.rpcTimeout().toNanos());
         while (true) {
             Observation observation = observe(work, verificationDeadline);
             boolean complete = true;
+            TopicPartition waitingForRemovedIsr = null;
             for (var entry : work.entrySet()) {
+                TopicPartition key = entry.getKey();
                 Work item = entry.getValue();
-                var p = partition(observation, entry.getKey());
+                var p = partition(observation, key);
                 item.requireElr |= p.elr() != null || p.lastKnownElr() != null;
-                if (item.requireElr && ElrSafetyPolicy.observe(ElrSafetyPolicy.partition(p)).blocks()) return false;
                 Set<Integer> replicas = new HashSet<>(p.replicas().stream().map(Node::id).toList());
                 Set<Integer> isr = new HashSet<>(p.isr().stream().map(Node::id).toList());
+                if (!replicas.containsAll(isr)) {
+                    Partition sample = ElrSafetyPolicy.partition(p);
+                    if (observation.active().containsKey(key)) return verificationFailed(key, "ACTIVE_REASSIGNMENT");
+                    if (isr.size() != p.isr().size() || !removedReplicasInIsr(item.assignment, sample))
+                        return verificationFailed(key, "ISR_OUTSIDE_ASSIGNMENT");
+                    if (item.requireElr) {
+                        var elr = ElrSafetyPolicy.observe(sample);
+                        // The ISR mismatch is the reason to wait. ELR and LastKnownELR must still be proven empty.
+                        if (elr.blocks() && elr.reason() != CapabilityAssessment.Reason.ELR_ISR_UNHEALTHY)
+                            return verificationFailed(key, elr.reason().name());
+                    }
+                    waitingForRemovedIsr = key;
+                    continue;
+                }
+                if (item.requireElr) {
+                    var elr = ElrSafetyPolicy.observe(ElrSafetyPolicy.partition(p));
+                    if (elr.blocks()) return verificationFailed(key, elr.reason().name());
+                }
                 Set<Integer> retained = new HashSet<>(item.assignment.getPreviousReplicas());
                 retained.retainAll(item.assignment.getTargetReplicas());
-                if (p.leader() == null || !replicas.contains(p.leader().id()) || !isr.contains(p.leader().id())
-                        || !replicas.containsAll(isr) || !isr.containsAll(retained)) return false;
-                Position position = classify(item.assignment, p, observation.active().get(entry.getKey()));
-                if (position == Position.CONFLICT || position == Position.STALE) return false;
+                if (p.leader() == null || !replicas.contains(p.leader().id()) || !isr.contains(p.leader().id()))
+                    return verificationFailed(key, "LEADER_NOT_IN_ISR");
+                if (!isr.containsAll(retained)) return verificationFailed(key, "RETAINED_REPLICA_NOT_IN_ISR");
+                Position position = classify(item.assignment, p, observation.active().get(key));
+                if (position == Position.CONFLICT) return verificationFailed(key, "CONFLICTING_REASSIGNMENT");
+                if (position == Position.STALE) return verificationFailed(key, "ASSIGNMENT_CHANGED");
                 complete &= position == Position.TARGET_COMPLETE && isr.equals(replicas);
             }
-            if (complete) return work.values().stream().noneMatch(w -> w.requireElr) || verifyElrTerminal(request);
-            if (verificationDeadline - time.nanoTime() <= 0) {
-                System.out.println("[INVALID] RF terminal verification: METADATA_NOT_CONVERGED.");
-                return false;
+            if (waitingForRemovedIsr != null) {
+                if (!complete) return verificationFailed(waitingForRemovedIsr, "OTHER_PARTITIONS_NOT_AT_TARGET");
+                return verifyRemovedIsrConvergence(request, work, verificationDeadline);
             }
-            pause(verificationDeadline);
+            if (complete) {
+                if (work.values().stream().anyMatch(w -> w.requireElr)) {
+                    long started = verificationDeadline.now();
+                    var snapshot = snapshots.readForVerification(admin, topicNames(work), Map.of(), verificationDeadline);
+                    verificationDeadline.check();
+                    if (!verifyElrTerminal(request, snapshot, started, verificationDeadline.now())) return false;
+                }
+                verificationDeadline.check();
+                return true;
+            }
+            time.pause(Math.min(settings.pollInterval().toNanos(), verificationDeadline.remainingNanos()));
         }
+    }
+
+    /** An exact target with full target ISR and only known removed members still present. */
+    static boolean removedReplicasInIsr(PartitionReplicaAssignment assignment, Partition actual) {
+        List<Integer> previous = assignment.getPreviousReplicas();
+        List<Integer> target = assignment.getTargetReplicas();
+        return previous.size() > target.size() && previous.containsAll(target)
+                && actual.replicas().equals(target) && actual.leader().isPresent() && target.contains(actual.leader().getAsInt())
+                && actual.isr().size() > target.size() && actual.isr().containsAll(target) && previous.containsAll(actual.isr());
+    }
+
+    private boolean verifyRemovedIsrConvergence(Request request, Map<TopicPartition, Work> work, AdminReadDeadline deadline) throws Exception {
+        Map<String, TopicReplicationPlan> plans = new TreeMap<>();
+        request.operations().forEach(operation -> plans.put(operation.topicName(), operation.plan()));
+        LOG.info("RF final verification observed removed replicas in the ISR and is checking for convergence.");
+        try {
+            while (true) {
+                long started = deadline.now();
+                deadline.check();
+                var snapshot = snapshots.readForVerification(admin, plans.keySet(), plans, deadline);
+                deadline.check();
+                if (snapshot == null) return verificationFailed("METADATA_UNAVAILABLE");
+                long now = deadline.now();
+                boolean converged = true;
+                for (var operation : request.operations()) {
+                    var mode = snapshot.safety().elrMode();
+                    if (operation.preflight().elrMode() != mode)
+                        return verificationFailed("ELR_MODE_CHANGED; Topic: " + operation.topicName());
+                    var topic = snapshot.topics().get(operation.topicName());
+                    Map<Integer, Partition> waiting = new HashMap<>();
+                    Set<Integer> completed = new HashSet<>();
+                    for (var assignment : operation.plan().getAssignments()) {
+                        int id = assignment.getPartition();
+                        completed.add(id);
+                        if (topic == null) continue; // The safety policy reports missing metadata below.
+                        var actual = topic.partitions().stream().filter(p -> p.id() == id).findFirst().orElse(null);
+                        if (actual == null) continue;
+                        boolean transition = removedReplicasInIsr(assignment, actual);
+                        var key = new TopicPartition(operation.topicName(), id);
+                        Work item = work.get(key);
+                        item.requireElr |= actual.elr().isPresent() || actual.lastKnownElr().isPresent();
+                        if (item.requireElr) {
+                            var elr = ElrSafetyPolicy.observe(actual);
+                            if (elr.blocks() && !(transition && elr.reason() == CapabilityAssessment.Reason.ELR_ISR_UNHEALTHY))
+                                return verificationFailed(key, elr.reason().name());
+                        }
+                        if (transition) waiting.put(id, actual);
+                    }
+                    var safety = terminalSafety(request, operation, snapshot, started, now, completed);
+                    var blockers = safety.reasons().stream().filter(finding -> {
+                        Partition transition = waiting.get(finding.partition().orElse(-1));
+                        if (transition == null) return true;
+                        // Only the already proven excess ISR can be pending. Neither finding can authorize success.
+                        return finding.code() != ReplicationSafetyResult.Reason.ISR_INCOMPLETE
+                                && (finding.code() != ReplicationSafetyResult.Reason.ELR_PARTITION_UNSAFE
+                                || ElrSafetyPolicy.assess(mode, transition).reason() != CapabilityAssessment.Reason.ELR_ISR_UNHEALTHY);
+                    }).map(f -> f.code().name()).distinct().sorted().toList();
+                    if (!blockers.isEmpty())
+                        return verificationFailed("Topic: " + operation.topicName() + "; reasons=" + blockers);
+                    converged &= waiting.isEmpty();
+                }
+                deadline.check();
+                if (converged) return true;
+                time.pause(Math.min(settings.pollInterval().toNanos(), deadline.remainingNanos()));
+            }
+        } catch (AdminReadDeadline.Exhausted ex) {
+            verificationFailed("METADATA_NOT_CONVERGED; could not confirm the target ISR within the verification deadline");
+            throw ex;
+        } catch (KafkaExecutionException ex) {
+            if (ex.getCode() == KafkaExecutionException.Code.METADATA_INVALID)
+                return verificationFailed(ex.getCode().name());
+            throw ex;
+        }
+    }
+
+    private static boolean verificationFailed(TopicPartition partition, String reason) {
+        return verificationFailed("Topic: " + partition.topic() + "; partition: " + partition.partition() + "; reason=" + reason);
+    }
+
+    private static boolean verificationFailed(String reason) {
+        System.out.println("[INVALID] RF terminal verification; " + reason + ".");
+        return false;
     }
 
     /** Fresh feature/config/broker/ELR evidence at completion, not just the earlier successful RPC. */
@@ -217,7 +354,10 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
         long started = time.nanoTime();
         Set<String> topics = new TreeSet<>(); request.operations().forEach(o -> topics.add(o.topicName()));
         var snapshot = snapshots.read(admin, topics, timeoutMs(rpcDeadline(request.deadlineNanos())));
-        long now = time.nanoTime();
+        return verifyElrTerminal(request, snapshot, started, time.nanoTime());
+    }
+
+    private boolean verifyElrTerminal(Request request, ReplicationClusterSnapshot snapshot, long started, long now) {
         for (var operation : request.operations()) {
             var originalMode = operation.preflight().elrMode();
             if (originalMode != com.devshawn.kafka.gitops.domain.metadata.ReplicationSafetyEvidence.ElrMode.UNKNOWN
@@ -226,8 +366,7 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
                 return false;
             }
             Set<Integer> completed = new HashSet<>(); operation.plan().getAssignments().forEach(a -> completed.add(a.getPartition()));
-            var result = policy.evaluateForExecution(operation.topicName(), operation.plan(), snapshot, request.permissions(),
-                    new ReplicationSafetyPolicy.Constraints(false,false,started,now,Duration.ofSeconds(30)), completed);
+            var result = terminalSafety(request, operation, snapshot, started, now, completed);
             if (result.status() != ReplicationSafetyResult.Status.READY) {
                 System.out.println("[INVALID] RF terminal verification; Topic: " + operation.topicName()
                         + "; reasons=" + result.reasons().stream().map(f -> f.code().name()).distinct().sorted().toList());
@@ -235,6 +374,12 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
             }
         }
         return true;
+    }
+
+    private ReplicationSafetyResult terminalSafety(Request request, PreparedOperation operation, ReplicationClusterSnapshot snapshot,
+                                                   long started, long now, Set<Integer> completed) {
+        return policy.evaluateForExecution(operation.topicName(), operation.plan(), snapshot, request.permissions(),
+                new ReplicationSafetyPolicy.Constraints(false, false, started, now, Duration.ofSeconds(30)), completed);
     }
 
     private Observation observe(Map<TopicPartition, Work> work, long deadline) throws Exception {
@@ -245,6 +390,21 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
                 new DescribeTopicsOptions().timeoutMs(timeoutMs(rpc))).allTopicNames(), rpc);
         Map<TopicPartition, PartitionReassignment> active = await(admin.listPartitionReassignments(
                 new ListPartitionReassignmentsOptions().timeoutMs(timeoutMs(rpc))).reassignments(), rpc);
+        return checkedObservation(work, id, topics, active);
+    }
+
+    private Observation observe(Map<TopicPartition, Work> work, AdminReadDeadline deadline) throws Exception {
+        DescribeClusterResult cluster = admin.describeCluster(new DescribeClusterOptions().timeoutMs(deadline.timeoutMs()));
+        String id = deadline.await(cluster.clusterId());
+        Map<String, TopicDescription> topics = deadline.await(admin.describeTopics(topicNames(work),
+                new DescribeTopicsOptions().timeoutMs(deadline.timeoutMs())).allTopicNames());
+        Map<TopicPartition, PartitionReassignment> active = deadline.await(admin.listPartitionReassignments(
+                new ListPartitionReassignmentsOptions().timeoutMs(deadline.timeoutMs())).reassignments());
+        return checkedObservation(work, id, topics, active);
+    }
+
+    private static Observation checkedObservation(Map<TopicPartition, Work> work, String id, Map<String, TopicDescription> topics,
+                                                  Map<TopicPartition, PartitionReassignment> active) throws Failure {
         for (PreparedOperation operation : work.values().stream().map(w -> w.operation).distinct().toList()) {
             TopicDescription topic = topics.get(operation.topicName());
             if (!operation.plan().getClusterId().equals(id) || topic == null
@@ -415,6 +575,7 @@ final class AdminReassignmentExecutor implements ReassignmentExecutor {
         Throwable cause = error;
         while (cause instanceof ExecutionException && cause.getCause() != null) cause = cause.getCause();
         if (cause instanceof Failure failure) return failure.category;
+        if (cause instanceof AdminReadDeadline.Exhausted) return ErrorCategory.DEADLINE_EXCEEDED;
         if (cause instanceof TimeoutException || cause instanceof org.apache.kafka.common.errors.TimeoutException) return ErrorCategory.RPC_TIMEOUT;
         if (cause instanceof InterruptedException) return ErrorCategory.INTERRUPTED;
         if (cause instanceof AuthorizationException) return ErrorCategory.AUTHORIZATION;

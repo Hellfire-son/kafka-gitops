@@ -1,14 +1,14 @@
 <!-- Modified for the independent Kafka GitOps 0.4.0 fork; see CHANGES-FROM-UPSTREAM.md. -->
-# Kafka GitOps 0.4.0 documentation
+# Kafka GitOps documentation
 
 Manage Apache Kafka topics, configurations and ACLs from a version-controlled
 YAML desired state. This is the independent
 [Hellfire-son/kafka-gitops](https://github.com/Hellfire-son/kafka-gitops) fork,
 based on joschi/kafka-gitops 0.3.1 and originally created by Shawn Seymour.
 
-**[Download v0.4.0](https://github.com/Hellfire-son/kafka-gitops/releases/tag/v0.4.0)** ·
-**[English Release Notes](release/kafka-gitops-v0.4.0-release-notes-en.md)** ·
-**[Документация на русском](release/kafka-gitops-v0.4.0-release-notes-ru.md)**
+**[GitHub Releases](https://github.com/Hellfire-son/kafka-gitops/releases)** ·
+**[English Release Notes](release/kafka-gitops-v0.4.1-release-notes-en.md)** ·
+**[Документация на русском](release/kafka-gitops-v0.4.1-release-notes-ru.md)**
 
 ## Start here
 
@@ -26,7 +26,7 @@ it, generate a plan against the intended cluster and inspect every operation.
 Only an explicit `apply` changes Kafka. Planning never applies automatically.
 A failure can leave partial changes; there is no automatic rollback.
 
-| Area | v0.4.0 behavior |
+| Area | v0.4.1 behavior |
 |---|---|
 | Topics | Creation, configuration additions/updates/removals and partition increases. |
 | Replication | Deterministic RF increases/decreases, rack checks, fresh preflight and completion verification. |
@@ -40,22 +40,47 @@ A decrease needs independent `apply --allow-replication-decrease` without global
 `--no-delete`. The latter forbids RF decreases even with permission. Existing
 JSON plans do not replace fresh safety evidence or permissions.
 
+The v0.4.1 plan and apply reports use common action labels and per-resource
+summaries. Plan reports proposed changes and distinct blocked topics. Apply
+reports the outcome of each resource from acknowledged operations and existing
+verification. Both omit detailed blocks for unchanged topics without
+diagnostics. Use `--verbose` for INFO and `NO_CHANGE` messages. The JSON format and CLI options are preserved. See the v0.4.1 release
+notes in [English](release/kafka-gitops-v0.4.1-release-notes-en.md) and
+[Russian](release/kafka-gitops-v0.4.1-release-notes-ru.md).
+
+ACL deletion uses Kafka's per-filter result and checks each binding response.
+Only confirmed removals contribute to the ACL deletion count. An empty result
+for the exact requested binding produces `NO_OP`. Broker refusals, timeouts
+and incomplete responses retain their failure or uncertainty status.
+
+The immediate partition safety check blocks stale plans before submission.
+APPLY reports `APPLY_BLOCKED` when nothing else changed and `APPLY_PARTIAL`
+when earlier changes were confirmed. A timeout after submission can leave the
+partition step `UNKNOWN`. APPLY stops at the failure and reports later work as
+`NOT_RUN`.
+
 ## Compatibility and evidence
 
-The final JAR passed separate live smoke tests on Kafka 3.2.3 and 3.7.1
-(plan, new topic, RF 1→2) and Kafka 4.4.0 (plan, new topic, RF 1→2→3→2 with
-ELR enabled). Earlier broader integration trials covered topic/config/partition
-operations and RF 1→2→3→2 on all three versions using the preceding artifact.
+Independent Final QA Round 3 passed 1,153 JVM tests, 26 Python tests, 56 CLI
+checks, 156 codec/JNI checks on each OS, and external IntegrationSpec on Java 21
+(76/76 Windows, 76/76 Linux). The live matrix used the final v0.4.1 JAR.
 
-ADS 4.3.1 is **NOT TESTED LIVE**. Full SASL/TLS/Kerberos/OAuth and ACL enforcement
-acceptance are incomplete; no vendor or production certification is claimed.
-Managed Kafka/Confluent Cloud is not fully integration-accepted. See
-[Confluent Cloud and legacy account integration](confluent-cloud.md).
+| Broker | Verified local deployment |
+|---|---|
+| Apache Kafka 3.2.3 | ZooKeeper |
+| Apache Kafka 3.7.1 | KRaft |
+| Apache Kafka 4.4.0 | KRaft, ELR level 1 enabled |
+| Confluent cp-kafka 7.9.11 | ZooKeeper, SASL/PLAIN and ACL enforcement |
 
-Use the EN/RU release notes for the current release summary and
-[final technical acceptance](release/v0.4.0-final-review.md) for exact test scopes.
-Audit, design and testing reports describe their dated stages and artifacts;
-their earlier blockers and preparation statuses are historical evidence.
+Each platform covered Validate, read-only PLAN, topic and configuration changes,
+partition increases, and RF 1 → 2 → 3 → 2. After each RF change, the ordered
+replica assignments, full ISR and control records were verified. Confluent also
+passed five RF 2 → 3 → 2 cycles and RF 4 → 6 on two topics across three racks,
+with two replicas per rack. ADS, Kerberos, TLS and OAuth were outside the live
+test matrix.
+
+See [Confluent Cloud and legacy account integration](confluent-cloud.md)
+for the managed-service scope.
 
 ## Project and security
 

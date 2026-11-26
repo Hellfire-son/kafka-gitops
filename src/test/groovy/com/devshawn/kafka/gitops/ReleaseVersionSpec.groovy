@@ -5,7 +5,7 @@ import picocli.CommandLine
 import spock.lang.Specification
 
 class ReleaseVersionSpec extends Specification {
-    void 'version help is 0.4.0 without reading configuration or creating a manager: #args'() {
+    void 'version help is 0.4.1 without reading configuration or creating a manager: #args'() {
         given:
         def factory = Mock(MainCommand.StateManagerFactory)
         def output = new StringWriter()
@@ -18,7 +18,7 @@ class ReleaseVersionSpec extends Specification {
 
         then:
         exit == 0
-        output.toString().trim() == '0.4.0'
+        output.toString().trim() == '0.4.1'
         0 * factory._
 
         where:

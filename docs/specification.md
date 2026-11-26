@@ -3,9 +3,9 @@
 
 This document describes the specification for how to write your Kafka cluster's desired state file. This currently must be a `YAML` file.
 
-This reference describes the desired-state YAML accepted by **Kafka GitOps 0.4.0**.
+This reference describes the desired-state YAML accepted by **Kafka GitOps 0.4.1**.
 It does not introduce a new YAML or executable-plan schema. See the
-[release notes](release/kafka-gitops-v0.4.0-release-notes-en.md) for application
+[release notes](release/kafka-gitops-v0.4.1-release-notes-en.md) for application
 version, compatibility and migration.
 
 The desired state file consists of:

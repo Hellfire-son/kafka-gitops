@@ -4,17 +4,20 @@ package com.devshawn.kafka.gitops.cli;
 import com.devshawn.kafka.gitops.MainCommand;
 import com.devshawn.kafka.gitops.StateManager;
 import com.devshawn.kafka.gitops.config.ManagerConfig;
-import com.devshawn.kafka.gitops.domain.plan.DesiredPlan;
+import com.devshawn.kafka.gitops.domain.plan.ApplyReport;
 import com.devshawn.kafka.gitops.exception.KafkaExecutionException;
 import com.devshawn.kafka.gitops.exception.MissingConfigurationException;
 import com.devshawn.kafka.gitops.exception.PlanIsUpToDateException;
 import com.devshawn.kafka.gitops.exception.ReadPlanInputException;
+import com.devshawn.kafka.gitops.exception.ReplicationExecutionException;
+import com.devshawn.kafka.gitops.exception.ReplicationPreflightException;
 import com.devshawn.kafka.gitops.exception.ValidationException;
 import com.devshawn.kafka.gitops.service.ParserService;
+import com.devshawn.kafka.gitops.service.ReassignmentExecutor.State;
+import com.devshawn.kafka.gitops.util.ApplyReportRenderer;
+import com.devshawn.kafka.gitops.util.ApplyReportRenderer.Completion;
 import com.devshawn.kafka.gitops.util.LogUtil;
-import com.devshawn.kafka.gitops.util.PlanUtil;
 import com.devshawn.kafka.gitops.exception.PlanBlockedException;
-import com.devshawn.kafka.gitops.util.PlanReportRenderer;
 import picocli.CommandLine;
 
 import java.io.File;
@@ -42,6 +45,9 @@ public class ApplyCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
+        ManagerConfig config = generateStateManagerConfig();
+        ApplyReport report = new ApplyReport(config);
+        Completion completion = Completion.FAILED;
         try {
             if (noManageReplication && (manageReplication || allowReplicationDecrease)) {
                 throw new ValidationException("RF_OPTION_CONFLICT: --no-manage-replication cannot be combined with other RF options.");
@@ -49,24 +55,33 @@ public class ApplyCommand implements Callable<Integer> {
             System.out.println("Executing apply...\n");
             ParserService parserService = new ParserService(parent.getStateFile());
             System.out.println("[CONFIG] Loading Kafka properties ...");
-            StateManager stateManager = parent.createStateManager(generateStateManagerConfig(), parserService);
-            DesiredPlan desiredPlan = stateManager.apply();
-            LogUtil.printApplyOverview(PlanUtil.getOverview(desiredPlan,
-                    parent.isDeleteDisabled(),
-                    parent.areAclsDisabled(),
-                    parent.areTopicsDisabled()));
+            StateManager stateManager = parent.createStateManager(config, parserService);
+            stateManager.apply(report);
+            completion = Completion.COMPLETED;
             return 0;
         } catch (PlanBlockedException ex) {
-            PlanReportRenderer.print(ex.getReport(), parent.isDeleteDisabled(), parent.areAclsDisabled(), parent.areTopicsDisabled());
+            report.prepare(ex.getReport().changes(), ex.getReport());
         } catch (PlanIsUpToDateException ex) {
-            LogUtil.printNoChangesMessage();
+            completion = Completion.NO_CHANGES;
             return 0;
+        } catch (ReplicationPreflightException ex) {
+            report.blockReplicationPreflight(ex);
+            LogUtil.printCommandFailure(ex, true);
+        } catch (ReplicationExecutionException ex) {
+            if (ex.getPhase() != ReplicationExecutionException.Phase.FOLLOWUP) {
+                boolean verified = ex.getPhase() == ReplicationExecutionException.Phase.SESSION_CLOSE
+                        && ex.getResult().state() == State.COMPLETED;
+                report.recordReplication(ex.getResult(), verified, ex.getPhase() != ReplicationExecutionException.Phase.EXECUTION);
+            }
+            LogUtil.printCommandFailure(ex, true);
         } catch (MissingConfigurationException | ReadPlanInputException ex) {
             LogUtil.printGenericError(ex, true);
         } catch (ValidationException ex) {
             LogUtil.printCommandFailure(ex, true);
         } catch (KafkaExecutionException ex) {
             LogUtil.printKafkaExecutionError(ex, true);
+        } finally {
+            ApplyReportRenderer.print(report, completion);
         }
         return 2;
     }

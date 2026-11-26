@@ -10,9 +10,15 @@ public final class ReplicationExecutionException extends ValidationException {
     private final Phase phase;
 
     public ReplicationExecutionException(ReassignmentExecutor.ExecutionResult result, Phase phase) {
-        super(message(result, phase));
+        this(result, phase, null);
+    }
+
+    public ReplicationExecutionException(ReassignmentExecutor.ExecutionResult result, Phase phase, KafkaExecutionException stalePartitionPlan) {
+        super(message(result, phase) + (stalePartitionPlan == null ? "" : "\n" + stalePartitionPlan.getCode()
+                + ": " + stalePartitionPlan.getMessage() + " " + stalePartitionPlan.getExceptionMessage()));
         this.result = java.util.Objects.requireNonNull(result);
         this.phase = java.util.Objects.requireNonNull(phase);
+        if (stalePartitionPlan != null) initCause(stalePartitionPlan);
     }
 
     public ReassignmentExecutor.ExecutionResult getResult() { return result; }

@@ -13,6 +13,7 @@ import com.devshawn.kafka.gitops.exception.ReplicationExecutionException
 import com.devshawn.kafka.gitops.service.*
 import org.apache.kafka.clients.admin.TopicListing
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.slf4j.LoggerFactory
 import picocli.CommandLine
 import spock.lang.Specification
@@ -83,8 +84,11 @@ class ReplicationApplicationWorkflowSpec extends Specification {
 
         then:
         r.code == 0
-        r.text.contains('Apply complete!')
-        r.text.contains('[COMPLETED] Replication assignments and ISR verified')
+        r.text.contains('Status: APPLY_COMPLETED')
+        r.text.contains('Reassignment: COMPLETED')
+        r.text.contains('Final verification: PASSED')
+        r.text.contains("Replication factor: ${previous.first().size()} -> ${target}")
+        r.text.contains('Successful resource changes: 3')
         !r.text.contains('application remains unavailable')
         h.lastResult.state() == State.COMPLETED
         h.opens == 1
@@ -111,7 +115,9 @@ class ReplicationApplicationWorkflowSpec extends Specification {
         then:
         r.code == 2
         r.text.contains(expected)
-        !r.text.contains('Apply complete!')
+        !r.text.contains('Status: APPLY_COMPLETED')
+        r.text.contains(expected == 'RF_OPTION_CONFLICT' ? 'Status: APPLY_FAILED' : 'Status: APPLY_BLOCKED')
+        r.text.contains('Successful resource changes: 0')
         h.opens == 0
         h.fake.writes.isEmpty()
         !h.events.any { it.startsWith('legacy-') }
@@ -137,7 +143,7 @@ class ReplicationApplicationWorkflowSpec extends Specification {
         then:
         r.code == 2
         r.text.contains(expected)
-        !r.text.contains('Apply complete!')
+        !r.text.contains('Status: APPLY_COMPLETED')
         !r.text.contains('private-')
         h.executionCalls == 0
         h.fake.writes.isEmpty()
@@ -172,8 +178,12 @@ class ReplicationApplicationWorkflowSpec extends Specification {
 
         then:
         r.code == 2
-        !r.text.contains('Apply complete!')
-        !r.text.contains('There are no necessary changes')
+        !r.text.contains('Status: APPLY_COMPLETED')
+        !r.text.contains('Status: NO_CHANGES')
+        r.text.contains('Status: APPLY_PARTIAL')
+        r.text.contains('Partially applied resources: 1')
+        r.text.contains('Resources not run: 2')
+        r.text.contains('Successful resource changes: 0')
         r.text.contains('Requests may have been accepted')
         !r.text.contains('private-')
         h.failure instanceof ReplicationExecutionException
@@ -199,7 +209,7 @@ class ReplicationApplicationWorkflowSpec extends Specification {
         then:
         r.code == 2
         r.text.contains('state=' + state)
-        !r.text.contains('Apply complete!')
+        !r.text.contains('Status: APPLY_COMPLETED')
         !h.events.any { it.startsWith('legacy-') }
         h.fake.writes.isEmpty()
         h.fake.closes == 1
@@ -227,7 +237,9 @@ class ReplicationApplicationWorkflowSpec extends Specification {
         r.code == 2
         r.text.contains('phase=VERIFICATION')
         r.text.contains('state=UNKNOWN')
-        !r.text.contains('Apply complete!')
+        r.text.contains('Final verification: UNCONFIRMED')
+        r.text.contains('Status: APPLY_UNKNOWN')
+        !r.text.contains('Status: APPLY_COMPLETED')
         !h.events.any { it.startsWith('legacy-') }
         h.fake.closes == 1
     }
@@ -246,7 +258,12 @@ class ReplicationApplicationWorkflowSpec extends Specification {
         then:
         first.code == 2
         first.text.contains('DEADLINE_EXCEEDED')
+        first.text.contains('Status: APPLY_UNKNOWN')
+        first.text.contains('Resources with unknown outcomes: 1')
         second.code == 0
+        second.text.contains('Status: APPLY_COMPLETED')
+        second.text.contains('Resources already satisfied: 1')
+        second.text.contains('Successful resource changes: 0')
         h.lastResult.state() == State.COMPLETED
         h.lastResult.partitions().values().every { it.submission() == Submission.OBSERVED }
         h.fake.writes.size() == 1
@@ -317,7 +334,7 @@ class ReplicationApplicationWorkflowSpec extends Specification {
 
         then:
         r.code == 2
-        !r.text.contains('Apply complete!')
+        !r.text.contains('Status: APPLY_COMPLETED')
         h.opens == 0
         h.fake.writes.isEmpty()
         !h.events.any { it.startsWith('legacy-') }
@@ -341,6 +358,8 @@ class ReplicationApplicationWorkflowSpec extends Specification {
         then:
         r.code == 2
         r.text.contains('Partition plan is stale')
+        r.text.contains('Status: APPLY_BLOCKED')
+        r.text.contains('Blocked resources: 1')
         h.opens == 0
         h.fake.writes.isEmpty()
         !h.events.any { it.startsWith('legacy-') }
@@ -359,7 +378,7 @@ class ReplicationApplicationWorkflowSpec extends Specification {
         r.code == 2
         r.text.contains('state=UNKNOWN')
         r.text.contains('Requests may have been accepted')
-        !r.text.contains('There are no necessary changes')
+        !r.text.contains('Status: NO_CHANGES')
         !r.text.contains('private-')
         h.failure.result.partitions().values().every { it.submission() == Submission.UNKNOWN }
         h.fake.closes == 1
@@ -393,7 +412,7 @@ class ReplicationApplicationWorkflowSpec extends Specification {
         r.text.contains('DEADLINE_EXCEEDED')
         r.text.contains('Requests may have been accepted')
         !r.text.contains('private-')
-        !r.text.contains('Apply complete!')
+        !r.text.contains('Status: APPLY_COMPLETED')
         h.fake.writes.size() == 1
         h.fake.closes == 1
         !h.events.any { it.startsWith('legacy-') }
@@ -435,6 +454,8 @@ class ReplicationApplicationWorkflowSpec extends Specification {
         then:
         r.code == 2
         r.text.contains('CONFIG_CHANGED')
+        r.text.contains('Blocked resources: 1')
+        r.text.contains('Resources not run: 3')
         h.executionCalls == 0
         h.fake.writes.isEmpty()
         h.fake.closes == 1
@@ -481,10 +502,94 @@ class ReplicationApplicationWorkflowSpec extends Specification {
         r.code == 2
         r.text.contains('phase=FOLLOWUP')
         r.text.contains('state=COMPLETED')
-        !r.text.contains('Apply complete!')
-        !r.text.contains('There are no necessary changes')
+        r.text.contains('Status: APPLY_PARTIAL')
+        r.text.contains('Successful resource changes: 1')
+        r.text.contains('Partially applied resources: 1')
+        !r.text.contains('Status: APPLY_COMPLETED')
+        !r.text.contains('Status: NO_CHANGES')
         !r.text.contains('private-')
         !h.fake.writes.isEmpty()
+    }
+
+    void 'late partition drift after completed RF keeps its typed reason and stops the other operations'() {
+        given:
+        def h = new ReplicationApplicationTestHarness()
+        def kafka = new PipelineKafka() {
+            @Override boolean increaseTopicPartitions(String name, int previous, int target) {
+                throw new KafkaExecutionException('Partition plan is stale.', "Topic ${name} has 3 partitions, expected ${previous}.",
+                        KafkaExecutionException.Code.PARTITION_PLAN_STALE, KafkaExecutionException.WriteOutcome.NOT_SENT)
+            }
+        }
+        kafka.harness = h
+
+        when:
+        def r = runCli(h, json(h, true), ['--manage-replication'], [], true, kafka)
+
+        then:
+        r.code == 2
+        r.text.contains('phase=FOLLOWUP')
+        r.text.contains('PARTITION_PLAN_STALE: Partition plan is stale.')
+        r.text.contains('Topic other-topic has 3 partitions, expected 1.')
+        r.text.contains('Result: BLOCKED')
+        r.text.contains('Status: APPLY_PARTIAL')
+        r.text.contains('Successful resource changes: 1')
+        r.text.contains('Resources not run: 1')
+        !h.events.any { it.startsWith('legacy-') }
+        !h.fake.writes.isEmpty()
+    }
+
+    @Unroll
+    void 'APPLY reports a terminal removed ISR as #status while preserving submission and masking'() {
+        given:
+        def trial = new RemovedIsrTrial([[0, 1, 2], [1, 2, 3]], 2)
+        def h = trial.harness
+        if (failure) {
+            trial.afterExecution { complete ->
+                h.fake.current = trial.extraIsr(complete)
+                h.snapshotMutation = { ignored -> throw new ClusterAuthorizationException('private-response-token') }
+            }
+        } else {
+            trial.waitThenConverge(reads)
+        }
+
+        when:
+        def r = runCli(h, json(h), ['--allow-replication-decrease'])
+
+        then:
+        r.code == code
+        r.text.contains("Status: APPLY_${status}")
+        r.text.contains("Final verification: ${code == 0 ? 'PASSED' : 'UNCONFIRMED'}")
+        r.text.contains("Successful resource changes: ${code == 0 ? 1 : 0}")
+        if (code != 0) {
+            assert r.text.contains('Resources with unknown outcomes: 1')
+            assert r.text.contains('submission=SENT, last known=COMPLETED')
+            assert r.text.contains(reason)
+        }
+        !r.text.contains('private-response-token')
+        h.fake.writes.size() == 1
+
+        where:
+        failure | reads             | status      | code | reason
+        false   | 2                 | 'COMPLETED' | 0    | ''
+        false   | Integer.MAX_VALUE | 'UNKNOWN'   | 2    | 'DEADLINE_EXCEEDED'
+        true    | 0                 | 'UNKNOWN'   | 2    | 'AUTHORIZATION'
+    }
+
+    void 'a saved RF decrease without original replicas is refused before opening Admin'() {
+        given:
+        def h = new ReplicationApplicationTestHarness([orders: [[0, 1, 2]]], [orders: 2])
+        File file = json(h)
+        Map saved = mapper().readValue(file, Map)
+        saved.topicPlans.first().replicationPlan.assignments.first().remove('previousReplicas')
+        mapper().writeValue(file, saved)
+
+        when:
+        def r = runCli(h, file, ['--allow-replication-decrease'])
+
+        then:
+        r.code == 2
+        h.opens == 0
+        h.fake.writes.empty
     }
 
     void 'session close failure after RF completion remains a safe non-success result'() {
@@ -498,8 +603,11 @@ class ReplicationApplicationWorkflowSpec extends Specification {
         then:
         r.code == 2
         r.text.contains('phase=SESSION_CLOSE')
+        r.text.contains('Final verification: PASSED')
+        r.text.contains('Status: APPLY_PARTIAL')
+        r.text.contains('Successful resource changes: 1')
         !r.text.contains('private-')
-        !r.text.contains('Apply complete!')
+        !r.text.contains('Status: APPLY_COMPLETED')
         !h.events.any { it.startsWith('legacy-') }
         h.fake.closes == 1
     }
